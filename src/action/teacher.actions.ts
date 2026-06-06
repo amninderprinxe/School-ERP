@@ -3,6 +3,7 @@
 import { requireRole } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { TeacherSchema } from "@/lib/validations/teacher";
 import bcrypt from "bcryptjs";
 import type { ActionResult } from "@/types/actions";
@@ -51,7 +52,7 @@ export async function createTeacher(formData: FormData): Promise<ActionResult> {
     });
 
     revalidatePath(REVALIDATE);
-    return { success: true };
+    redirect(REVALIDATE);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { success: false, error: "A user with this email already exists.", fieldErrors: { email: ["Email is already registered."] } };
@@ -96,7 +97,7 @@ export async function updateTeacher(id: string, formData: FormData): Promise<Act
     });
 
     revalidatePath(REVALIDATE);
-    return { success: true };
+    redirect(REVALIDATE);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { success: false, error: "A user with this email already exists.", fieldErrors: { email: ["Email is already registered."] } };
