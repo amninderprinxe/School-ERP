@@ -1,18 +1,18 @@
 import type { Role } from "@prisma/client";
 
 export interface NavItem {
-  label: string;
-  href: string;
-  icon: string;
+  label:       string;
+  href:        string;
+  icon:        string;
   exactMatch?: boolean;
 }
 
 export const NAV_CONFIG: Record<Role, NavItem[]> = {
   SUPER_ADMIN: [
-    { label: "Dashboard", href: "/super-admin",          icon: "LayoutDashboard", exactMatch: true },
-    { label: "Schools",   href: "/super-admin/schools",  icon: "Building2" },
-    { label: "All Users", href: "/super-admin/users",    icon: "Users" },
-    { label: "Settings",  href: "/super-admin/settings", icon: "Settings" },
+    { label: "Dashboard", href: "/super-admin",         icon: "LayoutDashboard", exactMatch: true },
+    { label: "Schools",   href: "/super-admin/schools", icon: "Building2" },
+    { label: "All Users", href: "/super-admin/users",   icon: "Users" },
+    { label: "Settings",  href: "/settings",            icon: "Settings" }, // ← points to shared page
   ],
 
   SCHOOL_ADMIN: [
@@ -20,7 +20,7 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Students",      href: "/school-admin/students",      icon: "GraduationCap" },
     { label: "Teachers",      href: "/school-admin/teachers",      icon: "UserCheck" },
     { label: "Classes",       href: "/school-admin/classes",       icon: "BookOpen" },
-    { label: "Sections",      href: "/school-admin/sections",      icon: "Layers" },         // ← NEW
+    { label: "Sections",      href: "/school-admin/sections",      icon: "Layers" },
     { label: "Subjects",      href: "/school-admin/subjects",      icon: "BookMarked" },
     { label: "Announcements", href: "/school-admin/announcements", icon: "Megaphone" },
   ],
