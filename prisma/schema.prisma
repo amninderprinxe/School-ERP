@@ -3,13 +3,13 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"   // change to "mysql" if you are on MySQL
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // ENUMS
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 
 enum Role {
   SUPER_ADMIN
@@ -31,138 +31,153 @@ enum Gender {
   OTHER
 }
 
-// ─────────────────────────────────────────────
-// SCHOOL (Tenant)
-// ─────────────────────────────────────────────
+// ── NEW ──────────────────────────────────────────────────────────
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SCHOOL  (tenant)
+// ─────────────────────────────────────────────────────────────────
 
 model School {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique   // used as subdomain / URL key
-  address     String?
-  phone       String?
-  email       String?
-  logoUrl     String?
-  status      SchoolStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id        String       @id @default(cuid())
+  name      String
+  slug      String       @unique
+  address   String?
+  phone     String?
+  email     String?
+  logoUrl   String?
+  status    SchoolStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
-  // Relations
-  users       User[]
-  classes     Class[]
-  sections    Section[]
-  subjects    Subject[]
+  // Existing relations
+  users         User[]
+  classes       Class[]
+  sections      Section[]
+  subjects      Subject[]
   announcements Announcement[]
+
+  // NEW
+  attendance    Attendance[]
 
   @@map("schools")
 }
 
-// ─────────────────────────────────────────────
-// USER (All roles live here)
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String                          // bcrypt hashed
-  role          Role
-  gender        Gender?
-  phone         String?
-  avatarUrl     String?
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  gender    Gender?
+  phone     String?
+  avatarUrl String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Multi-tenant: null only for SUPER_ADMIN
-  schoolId      String?
-  school        School?   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  // Role-specific profile (one will be populated based on role)
-  teacherProfile  TeacherProfile?
-  studentProfile  StudentProfile?
-  parentProfile   ParentProfile?
+  // Existing role-specific profiles
+  teacherProfile TeacherProfile?
+  studentProfile StudentProfile?
+  parentProfile  ParentProfile?
+
+  // NEW — attendance records this user has marked (as teacher/admin)
+  markedAttendances Attendance[] @relation("AttendanceMarkedBy")
 
   @@map("users")
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // TEACHER PROFILE
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 
 model TeacherProfile {
-  id           String   @id @default(cuid())
-  employeeCode String?
+  id            String    @id @default(cuid())
+  employeeCode  String?
   qualification String?
-  joiningDate  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  joiningDate   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Relations
-  classTeacherOf  Section[]          // class teacher of a section
-  subjects        TeacherSubject[]
+  // Existing relations
+  classTeacherOf Section[]
+  subjects       TeacherSubject[]
 
   @@map("teacher_profiles")
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // STUDENT PROFILE
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 
 model StudentProfile {
-  id            String   @id @default(cuid())
-  rollNumber    String?
-  admissionNo   String?
-  dateOfBirth   DateTime?
-  bloodGroup    String?
-  address       String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String    @id @default(cuid())
+  rollNumber  String?
+  admissionNo String?
+  dateOfBirth DateTime?
+  bloodGroup  String?
+  address     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  sectionId     String?
-  section       Section? @relation(fields: [sectionId], references: [id])
+  sectionId String?
+  section   Section? @relation(fields: [sectionId], references: [id])
 
-  // Parent link (a student can have multiple parents/guardians)
-  parents       ParentStudent[]
+  // Existing relations
+  parents ParentStudent[]
+
+  // NEW
+  attendance Attendance[]
 
   @@map("student_profiles")
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // PARENT PROFILE
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 
 model ParentProfile {
-  id          String   @id @default(cuid())
-  occupation  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  occupation String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Children link
-  children    ParentStudent[]
+  children ParentStudent[]
 
   @@map("parent_profiles")
 }
 
-// ─────────────────────────────────────────────
-// PARENT <-> STUDENT  (many-to-many)
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// PARENT <-> STUDENT
+// ─────────────────────────────────────────────────────────────────
 
 model ParentStudent {
-  id              String   @id @default(cuid())
-  relation        String?  // "Father", "Mother", "Guardian"
+  id       String  @id @default(cuid())
+  relation String?
 
-  parentProfileId String
-  parentProfile   ParentProfile  @relation(fields: [parentProfileId], references: [id], onDelete: Cascade)
+  parentProfileId  String
+  parentProfile    ParentProfile  @relation(fields: [parentProfileId], references: [id], onDelete: Cascade)
 
   studentProfileId String
   studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
@@ -171,55 +186,58 @@ model ParentStudent {
   @@map("parent_students")
 }
 
-// ─────────────────────────────────────────────
-// CLASS  (e.g. "Grade 10")
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// CLASS
+// ─────────────────────────────────────────────────────────────────
 
 model Class {
-  id        String    @id @default(cuid())
-  name      String                            // "Grade 10", "Class 5"
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  schoolId  String
-  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  sections  Section[]
-  subjects  Subject[]
+  sections Section[]
+  subjects Subject[]
 
   @@unique([schoolId, name])
   @@map("classes")
 }
 
-// ─────────────────────────────────────────────
-// SECTION  (e.g. "10-A")
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// SECTION
+// ─────────────────────────────────────────────────────────────────
 
 model Section {
   id        String   @id @default(cuid())
-  name      String                            // "A", "B", "C"
+  name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  classId   String
-  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId String
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
 
-  // Class teacher
   classTeacherId String?
   classTeacher   TeacherProfile? @relation(fields: [classTeacherId], references: [id])
 
-  students  StudentProfile[]
+  // Existing relations
+  students StudentProfile[]
+
+  // NEW
+  attendance Attendance[]
 
   @@unique([classId, name])
   @@map("sections")
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // SUBJECT
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 
 model Subject {
   id        String   @id @default(cuid())
@@ -228,38 +246,38 @@ model Subject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  classId   String
-  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId String
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
 
-  teachers  TeacherSubject[]
+  teachers TeacherSubject[]
 
   @@unique([schoolId, classId, name])
   @@map("subjects")
 }
 
-// ─────────────────────────────────────────────
-// TEACHER <-> SUBJECT  (many-to-many)
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// TEACHER <-> SUBJECT
+// ─────────────────────────────────────────────────────────────────
 
 model TeacherSubject {
-  id              String         @id @default(cuid())
+  id String @id @default(cuid())
 
   teacherProfileId String
   teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
 
-  subjectId        String
-  subject          Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@unique([teacherProfileId, subjectId])
   @@map("teacher_subjects")
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // ANNOUNCEMENT
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 
 model Announcement {
   id        String   @id @default(cuid())
@@ -268,8 +286,56 @@ model Announcement {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@map("announcements")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ATTENDANCE  ← NEW
+// ─────────────────────────────────────────────────────────────────
+
+model Attendance {
+  id        String           @id @default(cuid())
+  date      DateTime         @db.Date        // DATE only — no time stored
+  status    AttendanceStatus @default(PRESENT)
+  remarks   String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Tenant isolation
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  // The student whose attendance this is
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  // The section context (needed for bulk section-day queries)
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  // The teacher/admin who marked this record
+  markedById String
+  markedBy   User   @relation("AttendanceMarkedBy", fields: [markedById], references: [id], onDelete: Restrict)
+
+  // ── Constraints ─────────────────────────────────────────────
+  // One attendance record per student per day (daily attendance)
+  @@unique([studentProfileId, date])
+
+  // ── Indexes for common query patterns ───────────────────────
+  // 1. "Show all attendance for section X on date Y" (marking page)
+  @@index([sectionId, date])
+
+  // 2. "Show attendance for school X on date Y" (admin overview)
+  @@index([schoolId, date])
+
+  // 3. "Show attendance history for student X" (student/parent view)
+  @@index([studentProfileId])
+
+  // 4. "Show all records marked by teacher X"
+  @@index([markedById])
+
+  @@map("attendance")
 }
