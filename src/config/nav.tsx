@@ -12,7 +12,7 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Dashboard", href: "/super-admin",         icon: "LayoutDashboard", exactMatch: true },
     { label: "Schools",   href: "/super-admin/schools", icon: "Building2" },
     { label: "All Users", href: "/super-admin/users",   icon: "Users" },
-    { label: "Settings",  href: "/settings",            icon: "Settings" }, // ← points to shared page
+    { label: "Settings",  href: "/settings",            icon: "Settings" },
   ],
 
   SCHOOL_ADMIN: [
@@ -25,11 +25,13 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Announcements", href: "/school-admin/announcements", icon: "Megaphone" },
   ],
 
+  // ── TEACHER: Attendance added ────────────────────────────────
   TEACHER: [
-    { label: "Dashboard",   href: "/teacher",          icon: "LayoutDashboard", exactMatch: true },
-    { label: "My Classes",  href: "/teacher/classes",  icon: "BookOpen" },
-    { label: "My Subjects", href: "/teacher/subjects", icon: "BookMarked" },
-    { label: "Students",    href: "/teacher/students", icon: "Users" },
+    { label: "Dashboard",   href: "/teacher",            icon: "LayoutDashboard", exactMatch: true },
+    { label: "Attendance",  href: "/teacher/attendance", icon: "CalendarCheck" },   // ← NEW
+    { label: "My Classes",  href: "/teacher/classes",    icon: "BookOpen" },
+    { label: "My Subjects", href: "/teacher/subjects",   icon: "BookMarked" },
+    { label: "Students",    href: "/teacher/students",   icon: "Users" },
   ],
 
   STUDENT: [
@@ -40,9 +42,9 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
   ],
 
   PARENT: [
-    { label: "Dashboard",   href: "/parent",            icon: "LayoutDashboard", exactMatch: true },
-    { label: "My Children", href: "/parent/children",   icon: "Baby" },
-    { label: "Attendance",  href: "/parent/attendance", icon: "CalendarCheck" },
-    { label: "Results",     href: "/parent/results",    icon: "Award" },
+    { label: "Dashboard",   href: "/parent",             icon: "LayoutDashboard", exactMatch: true },
+    { label: "My Children", href: "/parent/children",    icon: "Baby" },
+    { label: "Attendance",  href: "/parent/attendance",  icon: "CalendarCheck" },
+    { label: "Results",     href: "/parent/results",     icon: "Award" },
   ],
 };
