@@ -1,156 +1,222 @@
-import { requireRole } from "@/lib/session";
-import { prisma } from "@/lib/db";
-import { StatCard } from "@/components/dashboard/stat-card";
-import {
-  Building2, Users, GraduationCap, UserCheck,
-  Activity, TrendingUp,
-} from "lucide-react";
+import { requireRole }       from "@/lib/session";
+import { prisma }            from "@/lib/db";
+import Link                  from "next/link";
+import { SchoolRowActions }  from "@/components/super-admin/school-row-actions";
+import { Building2, Plus }   from "lucide-react";
+import type { SchoolStatus } from "@prisma/client";
 
-export const metadata = { title: "Super Admin — Dashboard" };
+export const metadata = { title: "All Schools" };
 
-export default async function SuperAdminDashboard() {
-  const user = await requireRole(["SUPER_ADMIN"]);
+// ── Status badge config ─────────────────────────────────────────
+const STATUS_STYLE: Record<SchoolStatus, string> = {
+  ACTIVE:    "bg-green-50  text-green-700",
+  INACTIVE:  "bg-gray-100  text-gray-500",
+  SUSPENDED: "bg-red-50    text-red-600",
+};
 
-  const [
-    totalSchools,
-    activeSchools,
-    totalUsers,
-    totalStudents,
-    totalTeachers,
-    totalAdmins,
-  ] = await Promise.all([
-    prisma.school.count(),
-    prisma.school.count({ where: { status: "ACTIVE" } }),
-    prisma.user.count(),
-    prisma.user.count({ where: { role: "STUDENT" } }),
-    prisma.user.count({ where: { role: "TEACHER" } }),
-    prisma.user.count({ where: { role: "SCHOOL_ADMIN" } }),
-  ]);
+function formatDate(date: Date) {
+  return new Date(date).toLocaleDateString("en-IN", {
+    day:   "numeric",
+    month: "short",
+    year:  "numeric",
+  });
+}
 
-  const recentSchools = await prisma.school.findMany({
+export default async function SuperAdminSchoolsPage() {
+  await requireRole(["SUPER_ADMIN"]);
+
+  const schools = await prisma.school.findMany({
     orderBy: { createdAt: "desc" },
-    take: 6,
-    include: { _count: { select: { users: true } } },
+    include: {
+      _count: {
+        select: { users: true },
+      },
+    },
   });
 
-  const statusStyles: Record<string, string> = {
-    ACTIVE:    "bg-green-50 text-green-700",
-    INACTIVE:  "bg-gray-100 text-gray-600",
-    SUSPENDED: "bg-red-50 text-red-600",
-  };
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
 
-      {/* ── Page header ──────────────────────────────────────── */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Welcome back, {user.name?.split(" ")[0]} 👋
-        </h1>
-        <p className="text-gray-500 mt-1 text-sm">
-          Global overview of the School ERP platform.
-        </p>
-      </div>
-
-      {/* ── Stats grid ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        <StatCard
-          title="Total Schools"
-          value={totalSchools}
-          description={`${activeSchools} active`}
-          icon={Building2}
-          color="blue"
-        />
-        <StatCard
-          title="Total Users"
-          value={totalUsers}
-          description="Across all schools"
-          icon={Users}
-          color="indigo"
-        />
-        <StatCard
-          title="Students"
-          value={totalStudents}
-          description="Platform-wide"
-          icon={GraduationCap}
-          color="green"
-        />
-        <StatCard
-          title="Teachers"
-          value={totalTeachers}
-          description="Active educators"
-          icon={UserCheck}
-          color="purple"
-        />
-        <StatCard
-          title="School Admins"
-          value={totalAdmins}
-          description="Admin accounts"
-          icon={Activity}
-          color="orange"
-        />
-        <StatCard
-          title="Active Schools"
-          value={activeSchools}
-          description={`${totalSchools - activeSchools} inactive / suspended`}
-          icon={TrendingUp}
-          color="teal"
-        />
-      </div>
-
-      {/* ── Recent schools ───────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">All Schools</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Recently registered schools on the platform
-            </p>
-          </div>
-          <Building2 className="w-5 h-5 text-gray-300" />
+      {/* ── Header ─────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Schools</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {schools.length} school{schools.length !== 1 ? "s" : ""} on the
+            platform
+          </p>
         </div>
+        <Link
+          href="/super-admin/schools/new"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600
+            hover:bg-blue-700 text-white text-sm font-semibold rounded-lg
+            transition-colors focus:outline-none focus:ring-2
+            focus:ring-blue-500 focus:ring-offset-2"
+        >
+          <Plus className="w-4 h-4" />
+          Add School
+        </Link>
+      </div>
 
-        {recentSchools.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-gray-400">
-            No schools found. Add your first school.
+      {/* ── Table card ─────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {schools.length === 0 ? (
+          /* Empty state */
+          <div className="py-16 text-center">
+            <Building2 className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500">
+              No schools registered yet
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Create the first school to get started.
+            </p>
+            <Link
+              href="/super-admin/schools/new"
+              className="inline-flex items-center gap-1.5 mt-4 px-4 py-2
+                text-xs font-semibold text-blue-600 bg-blue-50
+                hover:bg-blue-100 rounded-lg transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add first school
+            </Link>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
-            {recentSchools.map((school) => (
-              <div
-                key={school.id}
-                className="flex items-center justify-between px-6 py-4 hover:bg-gray-50/60 transition-colors"
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
-                    <Building2 className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">
-                      {school.name}
-                    </p>
-                    <p className="text-xs text-gray-400 truncate">
-                      {school.email ?? school.slug}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 ml-4">
-                  <span className="text-xs text-gray-400 hidden sm:block">
-                    {school._count.users} users
-                  </span>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                      statusStyles[school.status] ?? "bg-gray-100 text-gray-600"
-                    }`}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+
+              {/* Head */}
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {[
+                    "School",
+                    "Slug",
+                    "Status",
+                    "Users",
+                    "Created",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className={`px-5 py-3.5 text-xs font-semibold
+                        text-gray-500 uppercase tracking-wide
+                        ${h === "" ? "text-right" : "text-left"}`}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              {/* Body */}
+              <tbody className="divide-y divide-gray-50">
+                {schools.map((school) => (
+                  <tr
+                    key={school.id}
+                    className="hover:bg-gray-50/50 transition-colors"
                   >
-                    {school.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+                    {/* Name + email */}
+                    <td className="px-5 py-4 min-w-[220px]">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-50 rounded-xl
+                          flex items-center justify-center shrink-0">
+                          <Building2 className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">
+                            {school.name}
+                          </p>
+                          {school.email && (
+                            <p className="text-xs text-gray-400 truncate mt-0.5">
+                              {school.email}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Slug */}
+                    <td className="px-5 py-4">
+                      <span className="font-mono text-xs text-gray-500
+                        bg-gray-100 px-2 py-0.5 rounded">
+                        {school.slug}
+                      </span>
+                    </td>
+
+                    {/* Status badge */}
+                    <td className="px-5 py-4">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-1
+                          rounded-full text-xs font-semibold
+                          ${STATUS_STYLE[school.status]}`}
+                      >
+                        {school.status}
+                      </span>
+                    </td>
+
+                    {/* User count */}
+                    <td className="px-5 py-4">
+                      <span className="px-2.5 py-1 text-xs font-medium
+                        bg-indigo-50 text-indigo-700 rounded-full">
+                        {school._count.users} user
+                        {school._count.users !== 1 ? "s" : ""}
+                      </span>
+                    </td>
+
+                    {/* Created date */}
+                    <td className="px-5 py-4 whitespace-nowrap">
+                      <span className="text-xs text-gray-500">
+                        {formatDate(school.createdAt)}
+                      </span>
+                    </td>
+
+                    {/* Row actions */}
+                    <td className="px-5 py-4 text-right min-w-[220px]">
+                      <SchoolRowActions
+                        schoolId={school.id}
+                        status={school.status}
+                        name={school.name}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+      {/* ── Summary cards ──────────────────────────────────── */}
+      {schools.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {(
+            [
+              {
+                label: "Active Schools",
+                count: schools.filter((s) => s.status === "ACTIVE").length,
+                style: "bg-green-50 text-green-700 border-green-100",
+              },
+              {
+                label: "Inactive Schools",
+                count: schools.filter((s) => s.status === "INACTIVE").length,
+                style: "bg-gray-50 text-gray-600 border-gray-100",
+              },
+              {
+                label: "Suspended Schools",
+                count: schools.filter((s) => s.status === "SUSPENDED").length,
+                style: "bg-red-50 text-red-600 border-red-100",
+              },
+            ] as const
+          ).map((item) => (
+            <div
+              key={item.label}
+              className={`rounded-xl border px-5 py-4 ${item.style}`}
+            >
+              <p className="text-2xl font-bold">{item.count}</p>
+              <p className="text-sm font-medium mt-0.5">{item.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
     </div>
   );
