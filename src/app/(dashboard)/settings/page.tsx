@@ -2,10 +2,20 @@ import { auth }                from "@/lib/auth";
 import { redirect }            from "next/navigation";
 import { prisma }              from "@/lib/db";
 import { ChangePasswordForm }  from "@/components/settings/change-password-form";
+import { EditProfileForm }     from "@/components/settings/edit-profile-form";
 import { formatRoleLabel }     from "@/lib/utils";
-import { User, Lock, ShieldCheck } from "lucide-react";
+import { ShieldCheck, Lock, UserCircle } from "lucide-react";
 
 export const metadata = { title: "Account Settings" };
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0] ?? "")
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -21,6 +31,7 @@ export default async function SettingsPage() {
       phone:     true,
       gender:    true,
       isActive:  true,
+      avatarUrl: true,
       createdAt: true,
       school:    { select: { name: true } },
     },
@@ -28,13 +39,11 @@ export default async function SettingsPage() {
 
   if (!user) redirect("/login");
 
-  const profileFields = [
-    { label: "Full Name",     value: user.name                        },
-    { label: "Email Address", value: user.email                       },
-    { label: "Role",          value: formatRoleLabel(user.role)        },
-    { label: "Gender",        value: user.gender    ?? "—"             },
-    { label: "Phone",         value: user.phone     ?? "—"             },
-    { label: "School",        value: user.school?.name ?? "—"          },
+  const readOnlyFields = [
+    { label: "Email Address",  value: user.email                       },
+    { label: "Role",           value: formatRoleLabel(user.role)        },
+    { label: "Gender",         value: user.gender    ?? "—"             },
+    { label: "School",         value: user.school?.name ?? "—"          },
     {
       label: "Account Status",
       value: user.isActive ? "Active" : "Inactive",
@@ -50,50 +59,53 @@ export default async function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-6">
 
-      {/* ── Page header ──────────────────────────────────────── */}
+      {/* ── Page header ──────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Manage your profile and security preferences
+          Manage your profile, photo and security preferences
         </p>
       </div>
 
-      {/* ── Profile info card ─────────────────────────────────── */}
+      {/* ── Edit Profile card ─────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-          <User className="w-4 h-4 text-gray-400" />
+          <UserCircle className="w-4 h-4 text-gray-400" />
           <div>
             <h2 className="text-base font-semibold text-gray-900">
-              Profile Information
+              Edit Profile
             </h2>
-            <p className="text-xs text-gray-400">
-              Your account details (read-only)
+            <p className="text-xs text-gray-400 mt-0.5">
+              Update your name, phone number and profile photo
             </p>
           </div>
         </div>
-
         <div className="p-6">
-          {/* Avatar + name strip */}
-          <div className="flex items-center gap-4 pb-6 mb-6 border-b border-gray-50">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600
-              rounded-full flex items-center justify-center text-white text-2xl
-              font-bold shrink-0 shadow-md">
-              {user.name?.[0]?.toUpperCase() ?? "U"}
-            </div>
-            <div>
-              <p className="text-lg font-bold text-gray-900">{user.name}</p>
-              <p className="text-sm text-gray-500 mt-0.5">{user.email}</p>
-              <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-0.5
-                text-xs font-semibold bg-blue-50 text-blue-700 rounded-full">
-                <ShieldCheck className="w-3 h-3" />
-                {formatRoleLabel(user.role)}
-              </span>
-            </div>
-          </div>
+          <EditProfileForm
+            initialName={user.name}
+            initialPhone={user.phone}
+            initialAvatarUrl={user.avatarUrl}
+            userInitials={getInitials(user.name)}
+          />
+        </div>
+      </div>
 
-          {/* Fields grid */}
+      {/* ── Read-only info card ───────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-gray-400" />
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              Account Information
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              These fields are managed by your school admin
+            </p>
+          </div>
+        </div>
+        <div className="p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {profileFields.map((field) => (
+            {readOnlyFields.map((field) => (
               <div
                 key={field.label}
                 className="bg-gray-50 border border-gray-100 rounded-lg px-4 py-3"
@@ -110,7 +122,7 @@ export default async function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Change password card ──────────────────────────────── */}
+      {/* ── Change password card ──────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
           <Lock className="w-4 h-4 text-gray-400" />
@@ -118,7 +130,7 @@ export default async function SettingsPage() {
             <h2 className="text-base font-semibold text-gray-900">
               Change Password
             </h2>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 mt-0.5">
               Choose a strong password — at least 8 characters
             </p>
           </div>
