@@ -27,7 +27,8 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Exams",         href: "/school-admin/exams",         icon: "ClipboardList" },
     { label: "Results",       href: "/school-admin/results",       icon: "ClipboardCheck" },
     { label: "Attendance",    href: "/school-admin/attendance",    icon: "CalendarCheck" },
-    { label: "Fees",          href: "/school-admin/fees",          icon: "Wallet" },          // ← NEW
+    { label: "Fees",          href: "/school-admin/fees",          icon: "Wallet" },
+    { label: "Import",        href: "/school-admin/import",        icon: "Upload" },          // ← NEW
     { label: "Announcements", href: "/school-admin/announcements", icon: "Megaphone" },
   ],
 
@@ -47,7 +48,7 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "My Subjects", href: "/student/subjects",   icon: "BookMarked" },
     { label: "Attendance",  href: "/student/attendance", icon: "CalendarCheck" },
     { label: "Results",     href: "/student/results",    icon: "Award" },
-    { label: "Fees",        href: "/student/fees",       icon: "Wallet" },              // ← NEW
+    { label: "Fees",        href: "/student/fees",       icon: "Wallet" },
   ],
 
   PARENT: [
@@ -56,6 +57,6 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Timetable",   href: "/parent/timetable",   icon: "CalendarDays" },
     { label: "Attendance",  href: "/parent/attendance",  icon: "CalendarCheck" },
     { label: "Results",     href: "/parent/results",     icon: "Award" },
-    { label: "Fees",        href: "/parent/fees",        icon: "Wallet" },              // ← NEW
+    { label: "Fees",        href: "/parent/fees",        icon: "Wallet" },
   ],
 };
