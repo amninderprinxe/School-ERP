@@ -2,8 +2,12 @@ import { requireRole } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { StatCard } from "@/components/dashboard/stat-card";
 import {
-  GraduationCap, UserCheck, BookOpen,
-  BookMarked, Megaphone, Layers,
+  GraduationCap,
+  UserCheck,
+  BookOpen,
+  BookMarked,
+  Megaphone,
+  Layers,
 } from "lucide-react";
 
 export const metadata = { title: "School Admin — Dashboard" };
@@ -11,6 +15,20 @@ export const metadata = { title: "School Admin — Dashboard" };
 export default async function SchoolAdminDashboard() {
   const user = await requireRole(["SCHOOL_ADMIN"]);
   const schoolId = user.schoolId!;
+
+  if (!schoolId) {
+  return (
+    <div className="rounded-xl border border-red-100 bg-red-50 p-6">
+      <h1 className="text-lg font-semibold text-red-700">
+        School not assigned
+      </h1>
+      <p className="text-sm text-red-600 mt-1">
+        Your School Admin account is not linked with any school. Please assign
+        a school to this user from Prisma Studio.
+      </p>
+    </div>
+  );
+}
 
   const [
     studentCount,
@@ -36,7 +54,6 @@ export default async function SchoolAdminDashboard() {
 
   return (
     <div className="space-y-8">
-
       {/* ── Page header ──────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">
@@ -96,9 +113,9 @@ export default async function SchoolAdminDashboard() {
       {/* ── Quick info banner ────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: "School Name",  value: school?.name ?? "—" },
-          { label: "Contact",      value: school?.phone ?? "—" },
-          { label: "Email",        value: school?.email ?? "—" },
+          { label: "School Name", value: school?.name ?? "—" },
+          { label: "Contact", value: school?.phone ?? "—" },
+          { label: "Email", value: school?.email ?? "—" },
         ].map((item) => (
           <div
             key={item.label}
@@ -152,7 +169,9 @@ export default async function SchoolAdminDashboard() {
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
                       {new Date(ann.createdAt).toLocaleDateString("en-IN", {
-                        day: "numeric", month: "short", year: "numeric",
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
                       })}
                     </p>
                   </div>
@@ -162,7 +181,6 @@ export default async function SchoolAdminDashboard() {
           )}
         </div>
       </div>
-
     </div>
   );
 }
