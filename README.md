@@ -468,8 +468,6 @@ Contributions, suggestions, and bug reports are welcome.
 
 This project is currently intended for educational and development purposes.
 
-Add your preferred open-source license before public production use.
-
 ---
 
 ## Author
