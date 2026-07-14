@@ -21,7 +21,7 @@ export default async function StudentDashboard() {
       },
     },
   });
-
+  
   const subjects = studentProfile?.section?.classId
     ? await prisma.subject.findMany({
         where: { classId: studentProfile.section.classId },
