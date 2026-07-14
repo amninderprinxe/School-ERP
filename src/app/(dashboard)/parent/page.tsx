@@ -34,7 +34,6 @@ export default async function ParentDashboard() {
 
   return (
     <div className="space-y-8">
-
       {/* ── Header ───────────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">
@@ -52,7 +51,9 @@ export default async function ParentDashboard() {
         <StatCard
           title="My Children"
           value={childrenCount}
-          description={childrenCount === 1 ? "Child enrolled" : "Children enrolled"}
+          description={
+            childrenCount === 1 ? "Child enrolled" : "Children enrolled"
+          }
           icon={Baby}
           color="blue"
         />
@@ -80,7 +81,7 @@ export default async function ParentDashboard() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {parentProfile!.children.map(({ studentProfile, relation }) => {
-              const className   = studentProfile.section?.class?.name;
+              const className = studentProfile.section?.class?.name;
               const sectionName = studentProfile.section?.name;
 
               return (
@@ -169,7 +170,9 @@ export default async function ParentDashboard() {
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
                       {new Date(ann.createdAt).toLocaleDateString("en-IN", {
-                        day: "numeric", month: "short", year: "numeric",
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
                       })}
                     </p>
                   </div>
@@ -179,7 +182,6 @@ export default async function ParentDashboard() {
           )}
         </div>
       </div>
-
     </div>
   );
 }
