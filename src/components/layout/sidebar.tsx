@@ -7,7 +7,8 @@ import {
   GraduationCap, UserCheck, BookOpen, BookMarked,
   Megaphone, CalendarCheck, Award, Baby, Layers,
   ClipboardList, ClipboardCheck, CalendarDays,
-  Wallet, X,
+  Wallet, Upload,           // ← Upload added
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { NAV_CONFIG }      from "@/config/nav";
@@ -32,6 +33,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ClipboardCheck,
   CalendarDays,
   Wallet,
+  Upload,           // ← NEW
 };
 
 interface SidebarProps {
@@ -55,8 +57,7 @@ function SidebarAvatar({ user }: { user: ShellUser }) {
       <img
         src={user.avatarUrl}
         alt={user.name ?? "Avatar"}
-        className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-600
-          shrink-0 shadow"
+        className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-600 shrink-0 shadow"
       />
     );
   }
@@ -134,7 +135,7 @@ export function Sidebar({ user, onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* User footer */}
+      {/* User footer → links to settings */}
       <div className="px-3 pb-4 pt-3 border-t border-slate-700/60 shrink-0">
         <Link
           href="/settings"
