@@ -209,7 +209,7 @@ Install the following before running the project:
 Clone the repository:
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
+git clone https://github.com/amninderprinxe/School-ERP.git
 cd School-ERP
 ```
 
