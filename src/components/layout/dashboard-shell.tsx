@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { Sidebar } from "./sidebar";
-import { Topbar } from "./topbar";
+import { useState }  from "react";
+import { Sidebar }   from "./sidebar";
+import { Topbar }    from "./topbar";
 import type { Role } from "@prisma/client";
 
 export interface ShellUser {
-  id: string;
-  name?: string | null;
-  email?: string | null;
-  role: Role;
-  schoolId: string | null;
+  id:         string;
+  name?:      string | null;
+  email?:     string | null;
+  role:       Role;
+  schoolId:   string | null;
+  avatarUrl?: string | null;   // ← NEW
 }
 
 interface DashboardShellProps {
-  user: ShellUser;
+  user:     ShellUser;
   children: React.ReactNode;
 }
 
@@ -24,7 +25,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
 
-      {/* ── Mobile backdrop ─────────────────────────────────── */}
+      {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-20 bg-black/40 backdrop-blur-sm lg:hidden"
@@ -33,7 +34,7 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
         />
       )}
 
-      {/* ── Sidebar ─────────────────────────────────────────── */}
+      {/* Sidebar */}
       <aside
         className={[
           "fixed inset-y-0 left-0 z-30 w-64 transition-transform duration-300 ease-in-out",
@@ -44,11 +45,11 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
         <Sidebar user={user} onClose={() => setSidebarOpen(false)} />
       </aside>
 
-      {/* ── Main content ─────────────────────────────────────── */}
+      {/* Main */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         <Topbar
           user={user}
-          onMenuClick={() => setSidebarOpen((prev) => !prev)}
+          onMenuClick={() => setSidebarOpen((p) => !p)}
         />
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
