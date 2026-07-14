@@ -10,20 +10,23 @@ import { Eye, EyeOff, GraduationCap } from "lucide-react";
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedIdentifier = identifier.trim();
+
     setError("");
 
-    if (!normalizedEmail || !password) {
-      setError("Email and password are required.");
+    if (!normalizedIdentifier || !password) {
+      setError("Email or Student ID and password are required.");
       return;
     }
 
@@ -31,7 +34,7 @@ export default function LoginPage() {
 
     try {
       const result = await signIn("credentials", {
-        email: normalizedEmail,
+        identifier: normalizedIdentifier,
         password,
         redirect: false,
         callbackUrl: "/",
@@ -43,7 +46,7 @@ export default function LoginPage() {
       }
 
       if (result.error) {
-        setError("Invalid email or password.");
+        setError("Invalid email, Student ID, or password.");
         return;
       }
 
@@ -67,6 +70,7 @@ export default function LoginPage() {
           className="object-cover"
           sizes="100vw"
         />
+
         <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-black/10" />
         <div className="absolute inset-0 bg-black/10" />
       </div>
@@ -85,12 +89,21 @@ export default function LoginPage() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-700 text-white shadow-sm">
                     <GraduationCap className="h-7 w-7" />
                   </div>
+
                   <div>
-                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Campus-X</h1>
-                    <p className="text-xs font-medium text-slate-500">One Campus. One Smart System.</p>
+                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+                      Campus-X
+                    </h1>
+
+                    <p className="text-xs font-medium text-slate-500">
+                      One Campus. One Smart System.
+                    </p>
                   </div>
                 </div>
-                <h2 className="text-3xl font-bold text-blue-800">Login</h2>
+
+                <h2 className="text-3xl font-bold text-blue-800">
+                  Login
+                </h2>
               </div>
 
               {error && (
@@ -104,25 +117,34 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <form
+                onSubmit={handleSubmit}
+                className="space-y-4"
+                noValidate
+              >
                 <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={email}
-                  autoComplete="email"
+                  id="identifier"
+                  name="identifier"
+                  type="text"
+                  value={identifier}
+                  autoComplete="username"
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
                   onChange={(event) => {
-                    setEmail(event.target.value);
-                    if (error) setError("");
+                    setIdentifier(event.target.value);
+
+                    if (error) {
+                      setError("");
+                    }
                   }}
-                  placeholder="Email Address"
+                  placeholder="Email or Student ID"
                   required
                   disabled={loading}
                   aria-invalid={Boolean(error)}
-                  aria-describedby={error ? "login-error" : undefined}
+                  aria-describedby={
+                    error ? "login-error" : undefined
+                  }
                   className="w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
                 />
 
@@ -135,24 +157,39 @@ export default function LoginPage() {
                     autoComplete="current-password"
                     onChange={(event) => {
                       setPassword(event.target.value);
-                      if (error) setError("");
+
+                      if (error) {
+                        setError("");
+                      }
                     }}
                     placeholder="Password"
                     required
                     disabled={loading}
                     aria-invalid={Boolean(error)}
-                    aria-describedby={error ? "login-error" : undefined}
+                    aria-describedby={
+                      error ? "login-error" : undefined
+                    }
                     className="w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
                   />
 
                   <button
                     type="button"
-                    onClick={() => setShowPassword((current) => !current)}
+                    onClick={() =>
+                      setShowPassword((current) => !current)
+                    }
                     disabled={loading}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
                     className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 transition hover:text-blue-700 disabled:cursor-not-allowed"
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
 
@@ -176,14 +213,18 @@ export default function LoginPage() {
 
               <div className="mt-7 border-t border-slate-100 pt-4 text-center">
                 <p className="text-xs text-slate-400">
-                  Powered by <span className="font-semibold text-slate-600">Campus-X</span>
+                  Powered by{" "}
+                  <span className="font-semibold text-slate-600">
+                    Campus-X
+                  </span>
                 </p>
               </div>
             </div>
           </div>
 
           <p className="mt-6 text-center text-xs text-white/70">
-            © {new Date().getFullYear()} Campus-X. All rights reserved.
+            © {new Date().getFullYear()} Campus-X. All rights
+            reserved.
           </p>
         </div>
       </div>
