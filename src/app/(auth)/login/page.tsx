@@ -1,44 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import type { Metadata } from "next";
-
-const DEMO_USERS = [
-  { role: "Super Admin", email: "superadmin@erp.com" },
-  { role: "School Admin", email: "admin@greenwood.edu" },
-  { role: "Teacher", email: "teacher@greenwood.edu" },
-  { role: "Student", email: "student@greenwood.edu" },
-  { role: "Parent", email: "parent@greenwood.edu" },
-];
+import { useState } from "react";
+import { Eye, EyeOff, GraduationCap } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedEmail = email.trim().toLowerCase();
     setError("");
+
+    if (!normalizedEmail || !password) {
+      setError("Email and password are required.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const result = await signIn("credentials", {
-        email: email.trim(),
+        email: normalizedEmail,
         password,
         redirect: false,
+        callbackUrl: "/",
       });
 
-      if (result?.error) {
-        setError("Invalid email or password. Please try again.");
-      } else {
-        // Push to root → root page reads role and redirects to correct dashboard
-        router.push("/");
-        router.refresh();
+      if (!result) {
+        setError("Unable to connect. Please try again.");
+        return;
       }
+
+      if (result.error) {
+        setError("Invalid email or password.");
+        return;
+      }
+
+      router.replace(result.url ?? "/");
+      router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -46,162 +56,137 @@ export default function LoginPage() {
     }
   };
 
-  const fillDemo = (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword("Password@123");
-    setError("");
-  };
-
   return (
-    <div className="w-full max-w-md">
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-8 text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-white/20 rounded-xl mb-4">
-            <svg
-              className="w-7 h-7 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 14l9-5-9-5-9 5 9 5z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"
-              />
-            </svg>
+    <main className="relative min-h-screen overflow-hidden bg-slate-950">
+      <div className="absolute inset-0">
+        <Image
+          src="/login-bg.jpg"
+          alt="School campus"
+          fill
+          priority
+          className="object-cover"
+          sizes="100vw"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-black/10" />
+        <div className="absolute inset-0 bg-black/10" />
+      </div>
+
+      <div className="relative z-10 flex min-h-screen items-center px-4 py-10 sm:px-8 lg:px-14">
+        <div className="w-full max-w-md">
+          <div className="relative overflow-visible rounded-[28px] bg-white shadow-2xl">
+            <div className="absolute -right-5 -top-5 h-11 w-11 rounded-xl bg-blue-700 shadow-lg" />
+            <div className="absolute -right-2 -top-8 h-7 w-7 rounded-lg bg-white" />
+            <div className="absolute -bottom-4 -left-4 h-11 w-11 rounded-xl bg-blue-700 shadow-lg" />
+            <div className="absolute -bottom-7 left-3 h-7 w-7 rounded-lg bg-white" />
+
+            <div className="px-6 py-7 sm:px-8 sm:py-8">
+              <div className="mb-6">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-700 text-white shadow-sm">
+                    <GraduationCap className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Campus-X</h1>
+                    <p className="text-xs font-medium text-slate-500">One Campus. One Smart System.</p>
+                  </div>
+                </div>
+                <h2 className="text-3xl font-bold text-blue-800">Login</h2>
+              </div>
+
+              {error && (
+                <div
+                  id="login-error"
+                  role="alert"
+                  aria-live="polite"
+                  className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-600"
+                >
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={email}
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    if (error) setError("");
+                  }}
+                  placeholder="Email Address"
+                  required
+                  disabled={loading}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "login-error" : undefined}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                />
+
+                <div className="relative">
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    autoComplete="current-password"
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      if (error) setError("");
+                    }}
+                    placeholder="Password"
+                    required
+                    disabled={loading}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? "login-error" : undefined}
+                    className="w-full rounded-md border border-slate-300 bg-white px-3.5 py-3 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((current) => !current)}
+                    disabled={loading}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-500 transition hover:text-blue-700 disabled:cursor-not-allowed"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 pt-1">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="inline-flex min-w-28 items-center justify-center rounded-md bg-blue-700 px-5 py-3 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-blue-400"
+                  >
+                    {loading ? "Signing in..." : "Login"}
+                  </button>
+
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm font-medium text-slate-700 transition hover:text-blue-700 hover:underline"
+                  >
+                    Forgot Password?
+                  </Link>
+                </div>
+              </form>
+
+              <div className="mt-7 border-t border-slate-100 pt-4 text-center">
+                <p className="text-xs text-slate-400">
+                  Powered by <span className="font-semibold text-slate-600">Campus-X</span>
+                </p>
+              </div>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-white">School ERP</h1>
-          <p className="text-blue-100 text-sm mt-1">
-            Sign in to your account
+
+          <p className="mt-6 text-center text-xs text-white/70">
+            © {new Date().getFullYear()} Campus-X. All rights reserved.
           </p>
         </div>
-
-        <div className="px-8 py-8">
-          {/* Error alert */}
-          {error && (
-            <div className="mb-5 flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-lg">
-              <svg
-                className="w-4 h-4 text-red-500 mt-0.5 shrink-0"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700 mb-1.5"
-              >
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@school.edu"
-                required
-                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-1.5"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg
-                    className="animate-spin h-4 w-4 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8H4z"
-                    />
-                  </svg>
-                  Signing in…
-                </span>
-              ) : (
-                "Sign In"
-              )}
-            </button>
-          </form>
-
-          {/* Demo credentials */}
-          <div className="mt-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-              Quick Demo Login
-            </p>
-            <div className="space-y-1.5">
-              {DEMO_USERS.map((u) => (
-                <button
-                  key={u.email}
-                  type="button"
-                  onClick={() => fillDemo(u.email)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs bg-gray-50 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 hover:border-blue-200 rounded-lg transition-colors text-left"
-                >
-                  <span className="font-medium text-gray-700">{u.role}</span>
-                  <span className="font-mono text-gray-500">{u.email}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-gray-400 text-center mt-2">
-              All demo accounts use{" "}
-              <span className="font-mono font-semibold">Password@123</span>
-            </p>
-          </div>
-        </div>
       </div>
-    </div>
+    </main>
   );
 }
