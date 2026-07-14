@@ -80,6 +80,7 @@ model School {
   id        String       @id @default(cuid())
   name      String
   slug      String       @unique
+  code      String?      @unique
   address   String?
   phone     String?
   email     String?
@@ -88,7 +89,6 @@ model School {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
-  // Existing relations
   users         User[]
   classes       Class[]
   sections      Section[]
@@ -99,7 +99,6 @@ model School {
   results       Result[]
   periods       Period[]
 
-  // NEW
   feeCategories FeeCategory[]
   feeStructures FeeStructure[]
   feePayments   FeePayment[]
@@ -110,11 +109,11 @@ model School {
 // ─────────────────────────────────────────────────────────────────
 // USER
 // ─────────────────────────────────────────────────────────────────
-
 model User {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
+  loginId   String?  @unique
   password  String
   role      Role
   gender    Gender?
@@ -139,7 +138,7 @@ model User {
 
 // ─────────────────────────────────────────────────────────────────
 // TEACHER PROFILE
-// ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────.
 
 model TeacherProfile {
   id            String    @id @default(cuid())
@@ -152,10 +151,9 @@ model TeacherProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  classTeacherOf      Section[]
-  subjects            TeacherSubject[]
-  periods             Period[]
-  passwordResetTokens PasswordResetToken[]
+  classTeacherOf Section[]
+  subjects       TeacherSubject[]
+  periods        Period[]
 
   @@map("teacher_profiles")
 }
@@ -180,15 +178,12 @@ model StudentProfile {
   sectionId String?
   section   Section? @relation(fields: [sectionId], references: [id])
 
-  // Existing relations
-  parents    ParentStudent[]
-  attendance Attendance[]
-  results    Result[]
+  parents     ParentStudent[]
+  attendance  Attendance[]
+  results     Result[]
+  feePayments FeePayment[]
 
-  // NEW
-  feePayments         FeePayment[]
-  passwordResetTokens PasswordResetToken[]
-
+  @@unique([sectionId, rollNumber])
   @@map("student_profiles")
 }
 
@@ -206,8 +201,7 @@ model ParentProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  children            ParentStudent[]
-  passwordResetTokens PasswordResetToken[]
+  children ParentStudent[]
 
   @@map("parent_profiles")
 }
@@ -465,14 +459,8 @@ model PasswordResetToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  userId           String
-  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  teacherProfile   TeacherProfile? @relation(fields: [teacherProfileId], references: [id])
-  teacherProfileId String?
-  studentProfile   StudentProfile? @relation(fields: [studentProfileId], references: [id])
-  studentProfileId String?
-  parentProfile    ParentProfile?  @relation(fields: [parentProfileId], references: [id])
-  parentProfileId  String?
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
