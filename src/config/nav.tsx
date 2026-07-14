@@ -23,15 +23,17 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Classes",       href: "/school-admin/classes",       icon: "BookOpen" },
     { label: "Sections",      href: "/school-admin/sections",      icon: "Layers" },
     { label: "Subjects",      href: "/school-admin/subjects",      icon: "BookMarked" },
-    { label: "Timetable",     href: "/school-admin/timetable",     icon: "CalendarDays" },  // ← NEW
+    { label: "Timetable",     href: "/school-admin/timetable",     icon: "CalendarDays" },
     { label: "Exams",         href: "/school-admin/exams",         icon: "ClipboardList" },
     { label: "Results",       href: "/school-admin/results",       icon: "ClipboardCheck" },
     { label: "Attendance",    href: "/school-admin/attendance",    icon: "CalendarCheck" },
+    { label: "Fees",          href: "/school-admin/fees",          icon: "Wallet" },          // ← NEW
     { label: "Announcements", href: "/school-admin/announcements", icon: "Megaphone" },
   ],
 
   TEACHER: [
     { label: "Dashboard",   href: "/teacher",            icon: "LayoutDashboard", exactMatch: true },
+    { label: "Timetable",   href: "/teacher/timetable",  icon: "CalendarDays" },
     { label: "Attendance",  href: "/teacher/attendance", icon: "CalendarCheck" },
     { label: "Results",     href: "/teacher/results",    icon: "ClipboardCheck" },
     { label: "My Classes",  href: "/teacher/classes",    icon: "BookOpen" },
@@ -41,15 +43,19 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
 
   STUDENT: [
     { label: "Dashboard",   href: "/student",            icon: "LayoutDashboard", exactMatch: true },
+    { label: "Timetable",   href: "/student/timetable",  icon: "CalendarDays" },
     { label: "My Subjects", href: "/student/subjects",   icon: "BookMarked" },
     { label: "Attendance",  href: "/student/attendance", icon: "CalendarCheck" },
     { label: "Results",     href: "/student/results",    icon: "Award" },
+    { label: "Fees",        href: "/student/fees",       icon: "Wallet" },              // ← NEW
   ],
 
   PARENT: [
     { label: "Dashboard",   href: "/parent",             icon: "LayoutDashboard", exactMatch: true },
     { label: "My Children", href: "/parent/children",    icon: "Baby" },
+    { label: "Timetable",   href: "/parent/timetable",   icon: "CalendarDays" },
     { label: "Attendance",  href: "/parent/attendance",  icon: "CalendarCheck" },
     { label: "Results",     href: "/parent/results",     icon: "Award" },
+    { label: "Fees",        href: "/parent/fees",        icon: "Wallet" },              // ← NEW
   ],
 };
