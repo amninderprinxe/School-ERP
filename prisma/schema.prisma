@@ -47,7 +47,6 @@ enum ExamType {
   OTHER
 }
 
-// ── NEW ──────────────────────────────────────────────────────────
 enum DayOfWeek {
   MONDAY
   TUESDAY
@@ -55,6 +54,22 @@ enum DayOfWeek {
   THURSDAY
   FRIDAY
   SATURDAY
+}
+
+// ── NEW ──────────────────────────────────────────────────────────
+
+enum PaymentMode {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  WAIVED
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -73,6 +88,7 @@ model School {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
+  // Existing relations
   users         User[]
   classes       Class[]
   sections      Section[]
@@ -81,7 +97,12 @@ model School {
   attendance    Attendance[]
   exams         Exam[]
   results       Result[]
-  periods       Period[] // ← NEW
+  periods       Period[]
+
+  // NEW
+  feeCategories FeeCategory[]
+  feeStructures FeeStructure[]
+  feePayments   FeePayment[]
 
   @@map("schools")
 }
@@ -106,11 +127,12 @@ model User {
   schoolId String?
   school   School? @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  teacherProfile    TeacherProfile?
-  studentProfile    StudentProfile?
-  parentProfile     ParentProfile?
-  markedAttendances Attendance[]    @relation("AttendanceMarkedBy")
-  createdExams      Exam[]          @relation("ExamCreatedBy")
+  teacherProfile      TeacherProfile?
+  studentProfile      StudentProfile?
+  parentProfile       ParentProfile?
+  markedAttendances   Attendance[]         @relation("AttendanceMarkedBy")
+  createdExams        Exam[]               @relation("ExamCreatedBy")
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -130,9 +152,10 @@ model TeacherProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  classTeacherOf Section[]
-  subjects       TeacherSubject[]
-  periods        Period[] // ← NEW
+  classTeacherOf      Section[]
+  subjects            TeacherSubject[]
+  periods             Period[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("teacher_profiles")
 }
@@ -157,9 +180,14 @@ model StudentProfile {
   sectionId String?
   section   Section? @relation(fields: [sectionId], references: [id])
 
+  // Existing relations
   parents    ParentStudent[]
   attendance Attendance[]
   results    Result[]
+
+  // NEW
+  feePayments         FeePayment[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("student_profiles")
 }
@@ -178,7 +206,8 @@ model ParentProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  children ParentStudent[]
+  children            ParentStudent[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("parent_profiles")
 }
@@ -213,9 +242,13 @@ model Class {
   schoolId String
   school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
+  // Existing relations
   sections Section[]
   subjects Subject[]
   exams    Exam[]
+
+  // NEW
+  feeStructures FeeStructure[]
 
   @@unique([schoolId, name])
   @@map("classes")
@@ -241,7 +274,7 @@ model Section {
 
   students   StudentProfile[]
   attendance Attendance[]
-  periods    Period[] // ← NEW
+  periods    Period[]
 
   @@unique([classId, name])
   @@map("sections")
@@ -265,7 +298,7 @@ model Subject {
 
   teachers TeacherSubject[]
   results  Result[]
-  periods  Period[] // ← NEW
+  periods  Period[]
 
   @@unique([schoolId, classId, name])
   @@map("subjects")
@@ -392,16 +425,98 @@ model Result {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// PERIOD  ← NEW
-// One record = one slot in a weekly timetable for a section
+// PERIOD
 // ─────────────────────────────────────────────────────────────────
 
 model Period {
   id           String    @id @default(cuid())
   dayOfWeek    DayOfWeek
-  periodNumber Int // 1-indexed: 1 = first period of the day
-  startTime    String? // "08:00"  (HH:MM, 24-hr, optional)
-  endTime      String? // "08:45"
+  periodNumber Int
+  startTime    String?
+  endTime      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  schoolId         String
+  school           School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  sectionId        String
+  section          Section         @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  subjectId        String?
+  subject          Subject?        @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  teacherProfileId String?
+  teacherProfile   TeacherProfile? @relation(fields: [teacherProfileId], references: [id], onDelete: SetNull)
+
+  @@unique([sectionId, dayOfWeek, periodNumber])
+  @@index([schoolId])
+  @@index([sectionId])
+  @@index([teacherProfileId])
+  @@map("periods")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// FEE CATEGORY  ← NEW
+// Named buckets that a school defines once and reuses every year
+// e.g. "Tuition", "Transport", "Library", "Sports", "Lab"
+// ─────────────────────────────────────────────────────────────────
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique @db.VarChar(64)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teacherProfile   TeacherProfile? @relation(fields: [teacherProfileId], references: [id])
+  teacherProfileId String?
+  studentProfile   StudentProfile? @relation(fields: [studentProfileId], references: [id])
+  studentProfileId String?
+  parentProfile    ParentProfile?  @relation(fields: [parentProfileId], references: [id])
+  parentProfileId  String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model FeeCategory {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Tenant isolation
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  feeStructures FeeStructure[]
+
+  // Category names must be unique per school
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@map("fee_categories")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// FEE STRUCTURE  ← NEW
+// Defines HOW MUCH is owed for a category, by which class,
+// in which academic year, and when it is due.
+//
+// classId = null  →  applies to ALL classes in the school
+// classId = set   →  applies to that specific class only
+//
+// Examples:
+//   Tuition | Grade 10 | 2024-25 | ₹12,000 | due 1 Apr
+//   Transport | (all)  | 2024-25 | ₹3,000  | due 1 Apr
+// ─────────────────────────────────────────────────────────────────
+
+model FeeStructure {
+  id           String    @id @default(cuid())
+  amount       Float // e.g. 12000.00
+  dueDate      DateTime? // when payment is expected
+  academicYear String // e.g. "2024-25"
+  description  String? // optional note
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -409,24 +524,80 @@ model Period {
   schoolId String
   school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  // Which section this slot belongs to
-  sectionId String
-  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  // Fee category (e.g. Tuition)
+  feeCategoryId String
+  feeCategory   FeeCategory @relation(fields: [feeCategoryId], references: [id], onDelete: Cascade)
 
-  // Optional: what subject is taught in this slot
-  // SetNull so deleting a subject clears the slot (doesn't delete it)
-  subjectId String?
-  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  // Optional: if null → applies to all classes
+  classId String?
+  class   Class?  @relation(fields: [classId], references: [id], onDelete: SetNull)
 
-  // Optional: which teacher is assigned to this slot
-  teacherProfileId String?
-  teacherProfile   TeacherProfile? @relation(fields: [teacherProfileId], references: [id], onDelete: SetNull)
+  payments FeePayment[]
 
-  // Constraints: one slot per (section, day, period number)
-  @@unique([sectionId, dayOfWeek, periodNumber])
-  // Indexes for common queries
+  // ── Indexes ───────────────────────────────────────────────────
+  // "All structures for school X in year Y"
+  @@index([schoolId, academicYear])
+  // "All structures for a category"
+  @@index([schoolId, feeCategoryId])
+  // "All structures for a class"
+  @@index([schoolId, classId])
+  @@map("fee_structures")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// FEE PAYMENT  ← NEW
+// One record per student per fee structure.
+// Tracks the cumulative amount paid and current status.
+//
+// Flow:
+//   Student owes ₹12,000 (FeeStructure.amount)
+//   Admin records ₹5,000 → status = PARTIAL, amountPaid = 5000
+//   Admin records ₹7,000 → status = PAID,    amountPaid = 12000
+//   Or:
+//   Admin waives ₹12,000 → status = WAIVED
+//
+// outstanding = feeStructure.amount - amountPaid - waivedAmount
+// ─────────────────────────────────────────────────────────────────
+
+model FeePayment {
+  id             String        @id @default(cuid())
+  amountPaid     Float         @default(0) // cumulative total paid
+  waivedAmount   Float         @default(0) // amount waived by admin
+  paymentDate    DateTime? // date of most recent payment
+  paymentMode    PaymentMode   @default(CASH)
+  status         PaymentStatus @default(PENDING)
+  transactionRef String? // bank ref / receipt no.
+  remarks        String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Tenant isolation
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  // Which student
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  // Which fee obligation
+  feeStructureId String
+  feeStructure   FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+
+  // ── Constraints ───────────────────────────────────────────────
+  // One payment record per student per fee structure
+  // (we update this record as payments come in, not create new rows)
+  @@unique([studentProfileId, feeStructureId])
+  // ── Indexes ───────────────────────────────────────────────────
+  // "All payments for school X" (admin overview)
   @@index([schoolId])
-  @@index([sectionId])
-  @@index([teacherProfileId])
-  @@map("periods")
+  // "All payments for student X" (student fee ledger)
+  @@index([studentProfileId])
+  // "All payments for structure X" (fee-wise collection report)
+  @@index([feeStructureId])
+  // "All PENDING/PARTIAL payments for school X" (defaulters list)
+  @@index([schoolId, status])
+  // "All payments for school X in year Y" (annual report)
+  // NOTE: academicYear comes from feeStructure — query via join
+  @@index([schoolId, paymentDate])
+  @@map("fee_payments")
 }
