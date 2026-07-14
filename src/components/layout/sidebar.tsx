@@ -6,9 +6,8 @@ import {
   LayoutDashboard, Building2, Users, Settings,
   GraduationCap, UserCheck, BookOpen, BookMarked,
   Megaphone, CalendarCheck, Award, Baby, Layers,
-  ClipboardList, ClipboardCheck,
-  CalendarDays,           // ← NEW
-  X,
+  ClipboardList, ClipboardCheck, CalendarDays,
+  Wallet, X,
   type LucideIcon,
 } from "lucide-react";
 import { NAV_CONFIG }      from "@/config/nav";
@@ -31,7 +30,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Layers,
   ClipboardList,
   ClipboardCheck,
-  CalendarDays,   // ← NEW
+  CalendarDays,
+  Wallet,
 };
 
 interface SidebarProps {
@@ -49,6 +49,26 @@ function getInitials(name?: string | null): string {
     .slice(0, 2);
 }
 
+function SidebarAvatar({ user }: { user: ShellUser }) {
+  if (user.avatarUrl) {
+    return (
+      <img
+        src={user.avatarUrl}
+        alt={user.name ?? "Avatar"}
+        className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-600
+          shrink-0 shadow"
+      />
+    );
+  }
+  return (
+    <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600
+      rounded-full flex items-center justify-center text-white text-sm font-bold
+      shrink-0 shadow-md">
+      {getInitials(user.name)}
+    </div>
+  );
+}
+
 export function Sidebar({ user, onClose }: SidebarProps) {
   const pathname = usePathname();
   const navItems = NAV_CONFIG[user.role];
@@ -56,7 +76,7 @@ export function Sidebar({ user, onClose }: SidebarProps) {
   return (
     <div className="flex h-full flex-col bg-slate-900">
 
-      {/* ── Logo ─────────────────────────────────────────── */}
+      {/* Logo */}
       <div className="flex items-center justify-between h-16 px-5
         border-b border-slate-700/60 shrink-0">
         <div className="flex items-center gap-3">
@@ -78,7 +98,7 @@ export function Sidebar({ user, onClose }: SidebarProps) {
         </button>
       </div>
 
-      {/* ── Navigation ───────────────────────────────────── */}
+      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         {navItems.map((item) => {
           const Icon     = ICON_MAP[item.icon];
@@ -114,15 +134,15 @@ export function Sidebar({ user, onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* ── User footer ──────────────────────────────────── */}
+      {/* User footer */}
       <div className="px-3 pb-4 pt-3 border-t border-slate-700/60 shrink-0">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-lg
-          hover:bg-slate-800 transition-colors cursor-default">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600
-            rounded-full flex items-center justify-center text-white text-sm
-            font-bold shrink-0 shadow-md">
-            {getInitials(user.name)}
-          </div>
+        <Link
+          href="/settings"
+          onClick={onClose}
+          className="flex items-center gap-3 px-2 py-2 rounded-lg
+            hover:bg-slate-800 transition-colors"
+        >
+          <SidebarAvatar user={user} />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate leading-none">
               {user.name ?? "User"}
@@ -131,7 +151,8 @@ export function Sidebar({ user, onClose }: SidebarProps) {
               {formatRoleLabel(user.role)}
             </p>
           </div>
-        </div>
+          <Settings className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+        </Link>
       </div>
 
     </div>
