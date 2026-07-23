@@ -7,9 +7,13 @@ import {
   STATUS_LABEL,
   PAYMENT_MODE_LABELS,
 }                         from "@/lib/fee-utils";
-import { Wallet, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  Wallet, Clock, CheckCircle2, AlertCircle, FileDown,
+}                         from "lucide-react";
+import { PdfDownloadButton } from "@/components/ui/pdf-download-button";
 
 export const metadata = { title: "My Fees" };
+
 
 export default async function StudentFeesPage() {
   const user     = await requireRole(["STUDENT"]);
@@ -20,13 +24,18 @@ export default async function StudentFeesPage() {
     include: { section: { include: { class: true } } },
   });
 
+  <PdfDownloadButton
+  href={`/api/pdf/fee-receipt?studentProfileId=${studentProfile.id}`}
+  label="Download Receipt"
+/>
+
+
   if (!studentProfile) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <Wallet className="w-10 h-10 text-gray-200 mx-auto mb-3" />
           <p className="text-sm text-gray-500">Student profile not found.</p>
-          <p className="text-xs text-gray-400 mt-1">Contact your school admin.</p>
         </div>
       </div>
     );
@@ -34,11 +43,7 @@ export default async function StudentFeesPage() {
 
   const payments = await prisma.feePayment.findMany({
     where:   { studentProfileId: studentProfile.id, schoolId },
-    include: {
-      feeStructure: {
-        include: { feeCategory: true, class: true },
-      },
-    },
+    include: { feeStructure: { include: { feeCategory: true, class: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -51,22 +56,39 @@ export default async function StudentFeesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">My Fees</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {studentProfile.section
-            ? `${studentProfile.section.class.name} — Section ${studentProfile.section.name}`
-            : "Your fee ledger"}
-        </p>
+
+      {/* Header with PDF download */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">My Fees</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {studentProfile.section
+              ? `${studentProfile.section.class.name} — Section ${studentProfile.section.name}`
+              : "Your fee ledger"}
+          </p>
+        </div>
+        {payments.length > 0 && (
+          
+          <a  href={`/api/pdf/fee-receipt?studentProfileId=${studentProfile.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm
+              font-semibold text-white bg-indigo-600 hover:bg-indigo-700
+              rounded-lg transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            Download Receipt
+          </a>
+        )}
       </div>
 
-      {/* Summary */}
+      {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Total Fees",    value: fmtCurrency(totalDue),         icon: Wallet,       color: "text-gray-900",   bg: "bg-gray-50" },
-          { label: "Paid",          value: fmtCurrency(totalPaid),        icon: CheckCircle2, color: "text-emerald-700", bg: "bg-emerald-50" },
-          { label: "Outstanding",   value: fmtCurrency(totalOutstanding), icon: Clock,        color: totalOutstanding > 0 ? "text-red-600" : "text-emerald-700", bg: totalOutstanding > 0 ? "bg-red-50" : "bg-emerald-50" },
-          { label: "Waived",        value: fmtCurrency(totalWaived),      icon: AlertCircle,  color: "text-blue-700",   bg: "bg-blue-50" },
+          { label: "Total Fees",  value: fmtCurrency(totalDue),         icon: Wallet,       color: "text-gray-900",    bg: "bg-gray-50" },
+          { label: "Paid",        value: fmtCurrency(totalPaid),        icon: CheckCircle2, color: "text-emerald-700", bg: "bg-emerald-50" },
+          { label: "Outstanding", value: fmtCurrency(totalOutstanding), icon: Clock,        color: totalOutstanding > 0 ? "text-red-600" : "text-emerald-700", bg: totalOutstanding > 0 ? "bg-red-50" : "bg-emerald-50" },
+          { label: "Waived",      value: fmtCurrency(totalWaived),      icon: AlertCircle,  color: "text-blue-700",    bg: "bg-blue-50" },
         ].map((item) => (
           <div key={item.label}
             className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-start gap-3">
@@ -89,14 +111,10 @@ export default async function StudentFeesPage() {
             {payments.length} fee record{payments.length !== 1 ? "s" : ""} assigned to you
           </p>
         </div>
-
         {payments.length === 0 ? (
           <div className="py-14 text-center">
             <Wallet className="w-10 h-10 text-gray-200 mx-auto mb-3" />
             <p className="text-sm font-medium text-gray-500">No fee records yet</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Fee records will appear here once your school admin assigns them.
-            </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
@@ -113,7 +131,8 @@ export default async function StudentFeesPage() {
                         <p className="font-semibold text-gray-900">
                           {p.feeStructure.feeCategory.name}
                         </p>
-                        <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${STATUS_STYLE[p.status]}`}>
+                        <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full
+                          ${STATUS_STYLE[p.status]}`}>
                           {STATUS_LABEL[p.status]}
                         </span>
                       </div>
@@ -122,14 +141,10 @@ export default async function StudentFeesPage() {
                         {p.feeStructure.description ? ` · ${p.feeStructure.description}` : ""}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-gray-900">
-                        {fmtCurrency(p.feeStructure.amount)}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-0.5">Total fee amount</p>
-                    </div>
+                    <p className="text-lg font-bold text-gray-900">
+                      {fmtCurrency(p.feeStructure.amount)}
+                    </p>
                   </div>
-
                   <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { label: "Amount Paid",  value: fmtCurrency(p.amountPaid),  color: "text-emerald-700" },
@@ -146,15 +161,6 @@ export default async function StudentFeesPage() {
                       </div>
                     ))}
                   </div>
-
-                  {p.transactionRef && (
-                    <p className="text-xs text-gray-400 mt-3">
-                      Ref: <span className="font-mono font-semibold text-gray-600">{p.transactionRef}</span>
-                    </p>
-                  )}
-                  {p.remarks && (
-                    <p className="text-xs text-gray-500 mt-1">Note: {p.remarks}</p>
-                  )}
                   {outstanding > 0 && p.status !== "WAIVED" && (
                     <div className="mt-3 flex items-center gap-2 p-2.5 bg-amber-50
                       border border-amber-200 rounded-lg">
