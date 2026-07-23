@@ -136,7 +136,7 @@ export default async function SettingsPage() {
           </div>
         </div>
         <div className="p-6">
-          <ChangePasswordForm />
+          <ChangePasswordForm role={user.role} />
         </div>
       </div>
 
