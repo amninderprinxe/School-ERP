@@ -19,6 +19,12 @@ enum Role {
   PARENT
 }
 
+enum HolidayType {
+  PUBLIC // Government / national holiday
+  SCHOOL // School-declared holiday
+  EVENT // School event / half-day
+}
+
 enum SchoolStatus {
   ACTIVE
   INACTIVE
@@ -117,6 +123,27 @@ model AuditLog {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Holiday
+// ─────────────────────────────────────────────────────────────────
+
+model Holiday {
+  id          String      @id @default(cuid())
+  name        String
+  date        DateTime    @db.Date
+  type        HolidayType @default(SCHOOL)
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, date])
+  @@index([schoolId, date])
+  @@map("holidays")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // SCHOOL
 // ─────────────────────────────────────────────────────────────────
 
@@ -142,6 +169,7 @@ model School {
   exams         Exam[]
   results       Result[]
   periods       Period[]
+  holidays      Holiday[] // ← add alongside existing back-relations
 
   feeCategories FeeCategory[]
   feeStructures FeeStructure[]
@@ -161,8 +189,8 @@ model Notification {
   id        String   @id @default(cuid())
   title     String
   body      String?
-  link      String?            // URL to navigate to on click (optional)
-  type      String   @default("SYSTEM")  // ANNOUNCEMENT | EXAM_CREATED | RESULT_PUBLISHED | FEE_RECORDED | SYSTEM
+  link      String? // URL to navigate to on click (optional)
+  type      String   @default("SYSTEM") // ANNOUNCEMENT | EXAM_CREATED | RESULT_PUBLISHED | FEE_RECORDED | SYSTEM
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -180,7 +208,6 @@ model Notification {
   @@index([schoolId])
   @@map("notifications")
 }
-
 
 // ─────────────────────────────────────────────────────────────────
 // ACADEMIC YEAR
@@ -238,7 +265,7 @@ model User {
 
   markedAttendances   Attendance[]         @relation("AttendanceMarkedBy")
   createdExams        Exam[]               @relation("ExamCreatedBy")
-  notifications Notification[]
+  notifications       Notification[]
   passwordResetTokens PasswordResetToken[]
 
   @@map("users")
