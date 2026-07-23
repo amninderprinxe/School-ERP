@@ -10,11 +10,11 @@ export interface NavItem {
 export const NAV_CONFIG: Record<Role, NavItem[]> = {
 
   SUPER_ADMIN: [
-    { label: "Dashboard",  href: "/super-admin",           icon: "LayoutDashboard", exactMatch: true },
-    { label: "Schools",    href: "/super-admin/schools",   icon: "Building2" },
-    { label: "All Users",  href: "/super-admin/users",     icon: "Users" },
-    { label: "Audit Log",  href: "/super-admin/audit-logs", icon: "ShieldCheck" },  // ← NEW
-    { label: "Settings",   href: "/settings",              icon: "Settings" },
+    { label: "Dashboard", href: "/super-admin",           icon: "LayoutDashboard", exactMatch: true },
+    { label: "Schools",   href: "/super-admin/schools",   icon: "Building2" },
+    { label: "All Users", href: "/super-admin/users",     icon: "Users" },
+    { label: "Audit Log", href: "/super-admin/audit-logs", icon: "ShieldCheck" },
+    { label: "Settings",  href: "/settings",              icon: "Settings" },
   ],
 
   SCHOOL_ADMIN: [
@@ -26,12 +26,13 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Sections",       href: "/school-admin/sections",       icon: "Layers" },
     { label: "Subjects",       href: "/school-admin/subjects",       icon: "BookMarked" },
     { label: "Timetable",      href: "/school-admin/timetable",      icon: "CalendarDays" },
+    { label: "Holidays",       href: "/school-admin/holidays",       icon: "CalendarOff" },  // ← NEW
     { label: "Exams",          href: "/school-admin/exams",          icon: "ClipboardList" },
     { label: "Results",        href: "/school-admin/results",        icon: "ClipboardCheck" },
     { label: "Attendance",     href: "/school-admin/attendance",     icon: "CalendarCheck" },
     { label: "Fees",           href: "/school-admin/fees",           icon: "Wallet" },
     { label: "Import",         href: "/school-admin/import",         icon: "Upload" },
-    { label: "Audit Log",      href: "/school-admin/audit-logs",     icon: "ShieldCheck" },  // ← NEW
+    { label: "Audit Log",      href: "/school-admin/audit-logs",     icon: "ShieldCheck" },
     { label: "Announcements",  href: "/school-admin/announcements",  icon: "Megaphone" },
   ],
 
