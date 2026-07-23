@@ -1,54 +1,55 @@
 // ── READ-ONLY results view for SCHOOL_ADMIN ───────────────────────
 // No ResultsEntryClient, no saveResults, no input fields.
-
-import { requireRole }    from "@/lib/session";
-import { prisma }         from "@/lib/db";
-import Link               from "next/link";
+import { PdfDownloadButton } from "@/components/ui/pdf-download-button";
+import { requireRole } from "@/lib/session";
+import { prisma } from "@/lib/db";
+import Link from "next/link";
 import {
   ClipboardCheck,
   ChevronDown,
-}                         from "lucide-react";
+} from "lucide-react";
 import {
   calcPercentage,
   gradeStyle,
   pctTextStyle,
-}                         from "@/lib/results-utils";
+} from "@/lib/results-utils";
 import { EXAM_TYPE_LABELS } from "@/lib/validations/exam";
-import type { ExamType }    from "@prisma/client";
+import type { ExamType } from "@prisma/client";
 
 export const metadata = { title: "Results Overview" };
 
 interface Props {
   searchParams: Promise<{
-    examId?:    string;
+    examId?: string;
     subjectId?: string;
     sectionId?: string;
   }>;
 }
 
+
 export default async function SchoolAdminResultsPage({
   searchParams,
 }: Props) {
   // ── SCHOOL_ADMIN only — no marks entry allowed here ────────────
-  const user     = await requireRole(["SCHOOL_ADMIN"]);
+  const user = await requireRole(["SCHOOL_ADMIN"]);
   const schoolId = user.schoolId!;
-  const sp       = await searchParams;
+  const sp = await searchParams;
 
   const { examId, subjectId, sectionId } = sp;
 
   // ── Load exams first ────────────────────────────────────────────
-const exams = await prisma.exam.findMany({
-  where: { schoolId },
-  include: { class: true },
-  orderBy: { createdAt: "desc" },
-});
+  const exams = await prisma.exam.findMany({
+    where: { schoolId },
+    include: { class: true },
+    orderBy: { createdAt: "desc" },
+  });
 
-// ── Resolve selected exam metadata ──────────────────────────────
-const selectedExam = exams.find((e) => e.id === examId);
+  // ── Resolve selected exam metadata ──────────────────────────────
+  const selectedExam = exams.find((e) => e.id === examId);
 
-// ── Load subjects + sections only after selected exam is known ──
-const [subjects, sections] = selectedExam
-  ? await Promise.all([
+  // ── Load subjects + sections only after selected exam is known ──
+  const [subjects, sections] = selectedExam
+    ? await Promise.all([
       prisma.subject.findMany({
         where: {
           schoolId,
@@ -72,32 +73,32 @@ const [subjects, sections] = selectedExam
         },
       }),
     ])
-  : [[], []];
+    : [[], []];
 
-  
+
 
   // ── Load results ──────────────────────────────────────────────
   const results = await prisma.result.findMany({
     where: {
       schoolId,
-      ...(examId    && { examId }),
+      ...(examId && { examId }),
       ...(subjectId && { subjectId }),
       ...(sectionId && {
         studentProfile: { sectionId },
       }),
     },
     include: {
-      exam:    { include: { class: true } },
+      exam: { include: { class: true } },
       subject: true,
       studentProfile: {
         include: {
-          user:    { select: { name: true, email: true } },
+          user: { select: { name: true, email: true } },
           section: { include: { class: true } },
         },
       },
     },
     orderBy: [
-      { exam:    { name: "asc" } },
+      { exam: { name: "asc" } },
       { subject: { name: "asc" } },
       { marksObtained: "desc" },
     ],
@@ -105,20 +106,20 @@ const [subjects, sections] = selectedExam
   });
 
   // ── Build summary ─────────────────────────────────────────────
-  const total    = results.length;
-  const passed   = results.filter(
+  const total = results.length;
+  const passed = results.filter(
     (r) => r.marksObtained / r.maxMarks >= 0.4,
   ).length;
   const avgPct =
     total > 0
       ? Math.round(
-          (results.reduce(
-            (sum, r) => sum + calcPercentage(r.marksObtained, r.maxMarks),
-            0,
-          ) /
-            total) *
-            10,
-        ) / 10
+        (results.reduce(
+          (sum, r) => sum + calcPercentage(r.marksObtained, r.maxMarks),
+          0,
+        ) /
+          total) *
+        10,
+      ) / 10
       : 0;
 
   // ── Current filter label ──────────────────────────────────────
@@ -231,8 +232,8 @@ const [subjects, sections] = selectedExam
           >
             Filter
           </button>
-          
-          <a  href="/school-admin/results"
+
+          <a href="/school-admin/results"
             className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600
               text-sm font-medium rounded-lg transition-colors inline-flex
               items-center"
@@ -246,10 +247,10 @@ const [subjects, sections] = selectedExam
       {total > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Total Records", value: total                        },
-            { label: "Average %",     value: `${avgPct}%`                 },
-            { label: "Passed",        value: passed                       },
-            { label: "Pass Rate",     value: `${total > 0 ? Math.round((passed / total) * 100) : 0}%` },
+            { label: "Total Records", value: total },
+            { label: "Average %", value: `${avgPct}%` },
+            { label: "Passed", value: passed },
+            { label: "Pass Rate", value: `${total > 0 ? Math.round((passed / total) * 100) : 0}%` },
           ].map((item) => (
             <div
               key={item.label}
@@ -411,6 +412,13 @@ const [subjects, sections] = selectedExam
                           <span className="text-gray-300 text-xs">—</span>
                         )}
                       </td>
+
+
+                      <PdfDownloadButton
+                        href={`/api/pdf/report-card?studentProfileId=${r.studentProfile.id}`}
+                        variant="icon"
+                        label="Download Report Card"
+                      />
 
                       {/* Remarks */}
                       <td className="px-4 py-3.5 text-xs text-gray-500
