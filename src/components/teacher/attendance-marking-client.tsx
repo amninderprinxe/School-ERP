@@ -4,9 +4,19 @@ import { useState, useTransition, useMemo } from "react";
 import { useRouter }           from "next/navigation";
 import { saveAttendance }      from "@/action/attendance.actions";
 import {
-  CalendarCheck, Users, CheckCircle2, AlertCircle,
-} from "lucide-react";
+  CalendarCheck,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  CalendarOff,
+}                              from "lucide-react";
 import type { AttendanceStatusType } from "@/lib/validations/attendance";
+import type { HolidayInfo }          from "@/lib/holiday-utils";
+import {
+  HOLIDAY_TYPE_LABELS,
+  HOLIDAY_TYPE_STYLE,
+}                                    from "@/lib/validations/holiday";
+import type { HolidayType }          from "@prisma/client";
 
 // ── Types ─────────────────────────────────────────────────────────
 export interface StudentRow {
@@ -31,56 +41,45 @@ interface Props {
   selectedSectionId: string;
   selectedDate:      string;
   hasSelection:      boolean;
+  holiday?:          HolidayInfo | null;   // ← NEW
 }
 
 // ── Status config ─────────────────────────────────────────────────
 const STATUSES: AttendanceStatusType[] = [
-  "PRESENT",
-  "ABSENT",
-  "LATE",
-  "HALF_DAY",
+  "PRESENT", "ABSENT", "LATE", "HALF_DAY",
 ];
 
-type StatusConfig = {
-  label: string;
-  short: string;
-  base: string;
-  active: string;
-  pill: string;
-};
-
-const STATUS_CFG: Record<AttendanceStatusType, StatusConfig> = {
+const STATUS_CFG: Record<AttendanceStatusType, { label: string; short: string; base: string; active: string; pill: string }> = {
   PRESENT: {
-    label: "Present",
-    short: "P",
-    base: "border-gray-200 text-gray-500 hover:border-green-400 hover:text-green-700 hover:bg-green-50",
+    label:  "Present",
+    short:  "P",
+    base:   "border-gray-200 text-gray-500 hover:border-green-400 hover:text-green-700 hover:bg-green-50",
     active: "border-green-500 bg-green-500 text-white shadow-sm",
-    pill: "bg-green-50 text-green-700",
+    pill:   "bg-green-50 text-green-700",
   },
   ABSENT: {
-    label: "Absent",
-    short: "A",
-    base: "border-gray-200 text-gray-500 hover:border-red-400 hover:text-red-700 hover:bg-red-50",
+    label:  "Absent",
+    short:  "A",
+    base:   "border-gray-200 text-gray-500 hover:border-red-400 hover:text-red-700 hover:bg-red-50",
     active: "border-red-500 bg-red-500 text-white shadow-sm",
-    pill: "bg-red-50 text-red-700",
+    pill:   "bg-red-50 text-red-600",
   },
   LATE: {
-    label: "Late",
-    short: "L",
-    base: "border-gray-200 text-gray-500 hover:border-amber-400 hover:text-amber-700 hover:bg-amber-50",
+    label:  "Late",
+    short:  "L",
+    base:   "border-gray-200 text-gray-500 hover:border-amber-400 hover:text-amber-700 hover:bg-amber-50",
     active: "border-amber-500 bg-amber-500 text-white shadow-sm",
-    pill: "bg-amber-50 text-amber-700",
+    pill:   "bg-amber-50 text-amber-700",
   },
   HALF_DAY: {
-    label: "Half Day",
-    short: "H",
-    base: "border-gray-200 text-gray-500 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50",
+    label:  "Half Day",
+    short:  "HD",
+    base:   "border-gray-200 text-gray-500 hover:border-blue-400 hover:text-blue-700 hover:bg-blue-50",
     active: "border-blue-500 bg-blue-500 text-white shadow-sm",
-    pill: "bg-blue-50 text-blue-700",
+    pill:   "bg-blue-50 text-blue-700",
   },
 };
 
-// Row background when a non-PRESENT status is active
 const ROW_BG: Record<AttendanceStatusType, string> = {
   PRESENT:  "border-gray-100 bg-white",
   ABSENT:   "border-red-200 bg-red-50/30",
@@ -95,17 +94,16 @@ export function AttendanceMarkingClient({
   selectedSectionId,
   selectedDate,
   hasSelection,
+  holiday = null,
 }: Props) {
-  const router                          = useRouter();
-  const [isPending,    startTransition] = useTransition();
-  const [isNavPending, startNav]        = useTransition();
-  const today = new Date().toISOString().split("T")[0];
+  const router                 = useRouter();
+  const [isPending, startTransition]    = useTransition();
+  const [isNavPending, startNav]           = useTransition();
+  const today = new Date().toISOString().split("T")[0]!;
 
-  // ── Local selection (before URL navigation) ───────────────────
   const [localSection, setLocalSection] = useState(selectedSectionId);
   const [localDate,    setLocalDate]    = useState(selectedDate || today);
 
-  // ── Per-student attendance state ──────────────────────────────
   const [statusMap, setStatusMap] = useState<Record<string, AttendanceStatusType>>(
     () => {
       const m: Record<string, AttendanceStatusType> = {};
@@ -122,13 +120,14 @@ export function AttendanceMarkingClient({
     return m;
   });
 
-  // ── UI feedback ───────────────────────────────────────────────
+  // ── Holiday override state ─────────────────────────────────────
+  const [holidayOverride, setHolidayOverride] = useState(false);
+
   const [saved,     setSaved]     = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const isUpdate = students.some((s) => s.existingStatus !== null);
 
-  // ── Live summary counts ───────────────────────────────────────
   const counts = useMemo(() => {
     const c: Record<AttendanceStatusType, number> = {
       PRESENT: 0, ABSENT: 0, LATE: 0, HALF_DAY: 0,
@@ -142,8 +141,11 @@ export function AttendanceMarkingClient({
     if (!sec || !dt) return;
     setSaved(false);
     setSaveError(null);
+    setHolidayOverride(false);
     startNav(() => {
-      router.push(`/teacher/attendance?sectionId=${sec}&date=${dt}`);
+      router.push(
+        `/teacher/attendance?sectionId=${sec}&date=${dt}`,
+      );
     });
   };
 
@@ -159,7 +161,6 @@ export function AttendanceMarkingClient({
     if (localSection && val) navigate(localSection, val);
   };
 
-  // ── Per-student setters ───────────────────────────────────────
   const setStatus = (id: string, status: AttendanceStatusType) => {
     setSaved(false);
     setStatusMap((p) => ({ ...p, [id]: status }));
@@ -169,7 +170,6 @@ export function AttendanceMarkingClient({
     setRemarksMap((p) => ({ ...p, [id]: val }));
   };
 
-  // ── Mark all ─────────────────────────────────────────────────
   const markAll = (status: AttendanceStatusType) => {
     setSaved(false);
     const updated: Record<string, AttendanceStatusType> = {};
@@ -177,7 +177,6 @@ export function AttendanceMarkingClient({
     setStatusMap(updated);
   };
 
-  // ── Submit ────────────────────────────────────────────────────
   const handleSubmit = () => {
     if (!students.length || !selectedSectionId || !selectedDate) return;
     setSaved(false);
@@ -204,7 +203,9 @@ export function AttendanceMarkingClient({
     });
   };
 
-  // ── Render ────────────────────────────────────────────────────
+  // Block saving on holidays unless teacher explicitly overrides
+  const isBlockedByHoliday = !!holiday && !holidayOverride;
+
   return (
     <div className="space-y-6">
 
@@ -219,8 +220,7 @@ export function AttendanceMarkingClient({
       {/* ── Selection card ───────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-          {/* Section select */}
+          {/* Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Section
@@ -228,7 +228,7 @@ export function AttendanceMarkingClient({
             {sections.length === 0 ? (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <p className="text-sm text-amber-700">
-                  No sections assigned to you yet. Contact your school admin.
+                  No sections assigned. Contact your school admin.
                 </p>
               </div>
             ) : (
@@ -236,9 +236,10 @@ export function AttendanceMarkingClient({
                 value={localSection}
                 onChange={handleSectionChange}
                 disabled={isNavPending}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm
-                  bg-white focus:outline-none focus:ring-2 focus:ring-blue-500
-                  focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5
+                  text-sm bg-white focus:outline-none focus:ring-2
+                  focus:ring-blue-500 focus:border-transparent
+                  disabled:bg-gray-50 disabled:text-gray-400"
               >
                 <option value="">— Select a section —</option>
                 {sections.map((s) => (
@@ -250,7 +251,7 @@ export function AttendanceMarkingClient({
             )}
           </div>
 
-          {/* Date picker */}
+          {/* Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Date
@@ -261,25 +262,91 @@ export function AttendanceMarkingClient({
               max={today}
               onChange={handleDateChange}
               disabled={isNavPending}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm
-                focus:outline-none focus:ring-2 focus:ring-blue-500
-                focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5
+                text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
+                focus:border-transparent disabled:bg-gray-50
+                disabled:text-gray-400"
             />
           </div>
         </div>
 
-        {/* Navigation loading indicator */}
         {isNavPending && (
           <div className="mt-3 flex items-center gap-2 text-xs text-blue-600">
             <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10"
                 stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              <path className="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
             Loading students…
           </div>
         )}
       </div>
+
+      {/* ── Holiday banner ───────────────────────────────────── */}
+      {hasSelection && !isNavPending && holiday && (
+        <div className="rounded-xl border overflow-hidden">
+          {/* Banner */}
+          <div className="flex items-start gap-3 px-5 py-4 bg-amber-50
+            border-amber-200">
+            <CalendarOff className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-amber-900">
+                {holiday.name}
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                This date is marked as a{" "}
+                <span
+                  className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold
+                    rounded mx-0.5
+                    ${HOLIDAY_TYPE_STYLE[holiday.type as HolidayType]}`}
+                >
+                  {HOLIDAY_TYPE_LABELS[holiday.type as HolidayType]}
+                </span>
+                . Saving attendance on a holiday is not recommended.
+              </p>
+              {holiday.description && (
+                <p className="text-xs text-amber-600 mt-1 italic">
+                  {holiday.description}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Override option */}
+          {!holidayOverride ? (
+            <div className="flex items-center justify-between px-5 py-3
+              bg-amber-50/60 border-t border-amber-100">
+              <p className="text-xs text-amber-700">
+                Attendance saving is disabled on holidays.
+              </p>
+              <button
+                type="button"
+                onClick={() => setHolidayOverride(true)}
+                className="text-xs font-semibold text-amber-800
+                  underline hover:no-underline ml-4 shrink-0"
+              >
+                Override — save anyway
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-5 py-3 bg-amber-100/60
+              border-t border-amber-200">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <p className="text-xs font-semibold text-amber-800">
+                Override active — you can save attendance on this holiday.
+              </p>
+              <button
+                type="button"
+                onClick={() => setHolidayOverride(false)}
+                className="text-xs text-amber-700 underline ml-auto shrink-0"
+              >
+                Cancel override
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Empty prompt ─────────────────────────────────────── */}
       {!hasSelection && !isNavPending && (
@@ -304,30 +371,25 @@ export function AttendanceMarkingClient({
               border border-blue-100 rounded-xl">
               <AlertCircle className="w-4 h-4 text-blue-500 shrink-0" />
               <p className="text-sm text-blue-700">
-                Attendance was already marked for this date. Saving will
+                Attendance already marked for this date. Saving will
                 update existing records.
               </p>
             </div>
           )}
 
-          {/* No students in section */}
+          {/* No students */}
           {students.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm
-              py-14 text-center">
+            <div className="bg-white rounded-xl border border-gray-100
+              shadow-sm py-14 text-center">
               <Users className="w-10 h-10 text-gray-200 mx-auto mb-3" />
               <p className="text-sm font-medium text-gray-500">
                 No students in this section
               </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Ask a School Admin to assign students to this section.
-              </p>
             </div>
           ) : (
             <>
-              {/* ── Summary + Mark-All toolbar ──────────────── */}
+              {/* Summary + Mark-All */}
               <div className="flex flex-wrap items-center justify-between gap-3">
-
-                {/* Live count pills */}
                 <div className="flex flex-wrap gap-2">
                   {STATUSES.map((s) => (
                     <span
@@ -340,8 +402,6 @@ export function AttendanceMarkingClient({
                     </span>
                   ))}
                 </div>
-
-                {/* Quick mark-all */}
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-gray-400">Mark all:</span>
                   {STATUSES.map((s) => (
@@ -349,8 +409,10 @@ export function AttendanceMarkingClient({
                       key={s}
                       type="button"
                       onClick={() => markAll(s)}
+                      disabled={isBlockedByHoliday}
                       className={`px-2.5 py-1 text-xs font-semibold border
-                        rounded-md transition-colors ${STATUS_CFG[s].base}`}
+                        rounded-md transition-colors disabled:opacity-40
+                        disabled:cursor-not-allowed ${STATUS_CFG[s].base}`}
                     >
                       {STATUS_CFG[s].short}
                     </button>
@@ -358,26 +420,27 @@ export function AttendanceMarkingClient({
                 </div>
               </div>
 
-              {/* ── Student list ────────────────────────────── */}
+              {/* Student rows */}
               <div className="space-y-2">
                 {students.map((student, idx) => {
                   const cur = statusMap[student.id] ?? "PRESENT";
                   return (
                     <div
                       key={student.id}
-                      className={`rounded-xl border transition-colors ${ROW_BG[cur]}`}
+                      className={`rounded-xl border transition-colors
+                        ${isBlockedByHoliday ? "opacity-60" : ""}
+                        ${ROW_BG[cur]}`}
                     >
-                      <div className="flex flex-wrap items-center gap-3 px-4 pt-4 pb-2">
-
-                        {/* Index badge */}
+                      <div className="flex flex-wrap items-center gap-3
+                        px-4 pt-4 pb-2">
                         <span className="w-7 h-7 flex items-center justify-center
-                          text-xs font-bold text-gray-400 bg-gray-100 rounded-full shrink-0">
+                          text-xs font-bold text-gray-400 bg-gray-100
+                          rounded-full shrink-0">
                           {idx + 1}
                         </span>
-
-                        {/* Name + roll */}
                         <div className="flex-1 min-w-[120px]">
-                          <p className="text-sm font-semibold text-gray-900 leading-tight">
+                          <p className="text-sm font-semibold text-gray-900
+                            leading-tight">
                             {student.name}
                           </p>
                           <p className="text-xs text-gray-400 mt-0.5">
@@ -388,17 +451,18 @@ export function AttendanceMarkingClient({
                               : "No roll no."}
                           </p>
                         </div>
-
-                        {/* Status button group */}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {STATUSES.map((status) => (
                             <button
                               key={status}
                               type="button"
                               onClick={() => setStatus(student.id, status)}
-                              className={`px-2.5 py-1.5 text-xs font-semibold border
-                                rounded-lg transition-all duration-150 focus:outline-none
-                                focus:ring-2 focus:ring-offset-1
+                              disabled={isBlockedByHoliday}
+                              className={`px-2.5 py-1.5 text-xs font-semibold
+                                border rounded-lg transition-all duration-150
+                                focus:outline-none focus:ring-2
+                                focus:ring-offset-1 disabled:opacity-40
+                                disabled:cursor-not-allowed
                                 ${cur === status
                                   ? STATUS_CFG[status].active
                                   : STATUS_CFG[status].base}`}
@@ -413,19 +477,19 @@ export function AttendanceMarkingClient({
                           ))}
                         </div>
                       </div>
-
-                      {/* Remarks row */}
                       <div className="px-4 pb-3">
                         <input
                           type="text"
-                          placeholder="Optional remarks (e.g. medical leave, informed in advance)…"
+                          placeholder="Optional remarks…"
                           value={remarksMap[student.id] ?? ""}
                           onChange={(e) => setRemarks(student.id, e.target.value)}
                           maxLength={200}
-                          className="w-full text-xs border border-gray-200 rounded-lg
-                            px-3 py-1.5 bg-white/70 placeholder-gray-300
-                            focus:outline-none focus:ring-1 focus:ring-blue-400
-                            focus:border-transparent"
+                          disabled={isBlockedByHoliday}
+                          className="w-full text-xs border border-gray-200
+                            rounded-lg px-3 py-1.5 bg-white/70
+                            placeholder-gray-300 focus:outline-none
+                            focus:ring-1 focus:ring-blue-400
+                            focus:border-transparent disabled:opacity-50"
                         />
                       </div>
                     </div>
@@ -433,18 +497,20 @@ export function AttendanceMarkingClient({
                 })}
               </div>
 
-              {/* ── Success / Error banners ─────────────────── */}
+              {/* Success / Error */}
               {saved && (
                 <div className="flex items-start gap-3 p-4 bg-green-50
                   border border-green-200 rounded-xl">
-                  <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0
+                    mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-green-800">
                       Attendance saved!
                     </p>
                     <p className="text-xs text-green-600 mt-0.5">
-                      {students.length} student{students.length !== 1 ? "s" : ""} marked
-                      for {selectedDate}.
+                      {students.length} student
+                      {students.length !== 1 ? "s" : ""} marked for{" "}
+                      {selectedDate}.
                     </p>
                   </div>
                 </div>
@@ -453,20 +519,22 @@ export function AttendanceMarkingClient({
               {saveError && (
                 <div className="flex items-start gap-3 p-4 bg-red-50
                   border border-red-200 rounded-xl">
-                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-600 font-medium">{saveError}</p>
+                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0
+                    mt-0.5" />
+                  <p className="text-sm text-red-600 font-medium">
+                    {saveError}
+                  </p>
                 </div>
               )}
 
-              {/* ── Footer: info + save button ──────────────── */}
+              {/* Footer */}
               <div className="flex items-center justify-between py-2">
                 <p className="text-xs text-gray-400">
-                  {students.length} student{students.length !== 1 ? "s" : ""}
-                  {" · "}
-                  {selectedDate}
+                  {students.length} student
+                  {students.length !== 1 ? "s" : ""} · {selectedDate}
                   {isUpdate && (
-                    <span className="ml-2 px-1.5 py-0.5 bg-blue-50 text-blue-600
-                      text-xs font-medium rounded">
+                    <span className="ml-2 px-1.5 py-0.5 bg-blue-50
+                      text-blue-600 text-xs font-medium rounded">
                       Updating
                     </span>
                   )}
@@ -474,15 +542,21 @@ export function AttendanceMarkingClient({
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={isPending || students.length === 0}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600
-                    hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed
-                    text-white text-sm font-semibold rounded-lg transition-colors
-                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  disabled={
+                    isPending ||
+                    students.length === 0 ||
+                    isBlockedByHoliday
+                  }
+                  className="inline-flex items-center gap-2 px-6 py-2.5
+                    bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400
+                    disabled:cursor-not-allowed text-white text-sm
+                    font-semibold rounded-lg transition-colors focus:outline-none
+                    focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                   {isPending ? (
                     <>
-                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin h-4 w-4" fill="none"
+                        viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10"
                           stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor"
