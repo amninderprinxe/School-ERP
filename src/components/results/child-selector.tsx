@@ -13,9 +13,14 @@ export interface ChildOption {
 interface Props {
   children:   ChildOption[];
   selectedId: string;
+  basePath?:  string;   // defaults to "/parent/results"
 }
 
-function ChildSelectorInner({ children, selectedId }: Props) {
+function ChildSelectorInner({
+  children,
+  selectedId,
+  basePath = "/parent/results",
+}: Props) {
   const router = useRouter();
 
   if (children.length <= 1) return null;
@@ -27,7 +32,7 @@ function ChildSelectorInner({ children, selectedId }: Props) {
       <select
         value={selectedId}
         onChange={(e) =>
-          router.push(`/parent/results?childId=${e.target.value}`)
+          router.push(`${basePath}?childId=${e.target.value}`)
         }
         className="text-sm font-semibold text-gray-700 bg-transparent
           focus:outline-none cursor-pointer pr-1"
