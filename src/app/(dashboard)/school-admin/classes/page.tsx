@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { RowActions } from "@/components/ui/row-actions";
 import { deleteClass } from "@/action/class.actions";
-import { BookOpen, Plus } from "lucide-react";
+import { Plus} from "lucide-react";
+import { BookOpen} from "lucide-react";
 
 export const metadata = { title: "Classes" };
 
