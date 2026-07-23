@@ -14,6 +14,7 @@ import {
   STATUS_LABEL,
   PAYMENT_MODE_LABELS,
 }                            from "@/lib/fee-utils";
+import { PdfDownloadButton } from "@/components/ui/pdf-download-button";
 
 export const metadata = { title: "Student Fee Ledger" };
 interface Props { params: Promise<{ studentProfileId: string }> }
@@ -35,6 +36,11 @@ export default async function StudentFeeLedgerPage({ params }: Props) {
     },
   });
   if (!student) notFound();
+
+  <PdfDownloadButton
+  href={`/api/pdf/fee-receipt?studentProfileId=${studentProfileId}`}
+  label="Download Receipt"
+/>
 
   // All existing payments for this student
   const existingPayments = await prisma.feePayment.findMany({
