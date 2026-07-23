@@ -19,9 +19,9 @@ interface TeacherInitialData {
 }
 
 interface TeacherFormProps {
-  action:       (formData: FormData) => Promise<ActionResult>;
+  action: (formData: FormData) => Promise<ActionResult>;
   initialData?: TeacherInitialData;
-  mode:         "create" | "edit";
+  mode: "create" | "edit";
 }
 
 function toDateInput(d?: Date | null): string {
@@ -68,22 +68,44 @@ export function TeacherForm({ action, initialData, mode }: TeacherFormProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
-          <label className={LABEL}>Full Name <span className="text-red-500">*</span></label>
-          <input type="text" name="name" required defaultValue={initialData?.name}
-            className={INPUT} placeholder="Ravi Sharma" />
+          <label className={LABEL}>
+            Full Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="name"
+            required
+            defaultValue={initialData?.name}
+            className={INPUT}
+            placeholder="Ravi Sharma"
+          />
           {fe.name && <p className="text-xs text-red-500 mt-1">{fe.name[0]}</p>}
         </div>
 
         <div>
-          <label className={LABEL}>Email Address <span className="text-red-500">*</span></label>
-          <input type="email" name="email" required defaultValue={initialData?.email}
-            className={INPUT} placeholder="teacher@school.edu" />
-          {fe.email && <p className="text-xs text-red-500 mt-1">{fe.email[0]}</p>}
+          <label className={LABEL}>
+            Email Address <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="email"
+            name="email"
+            required
+            defaultValue={initialData?.email}
+            className={INPUT}
+            placeholder="teacher@school.edu"
+          />
+          {fe.email && (
+            <p className="text-xs text-red-500 mt-1">{fe.email[0]}</p>
+          )}
         </div>
 
         <div>
           <label className={LABEL}>Gender</label>
-          <select name="gender" defaultValue={initialData?.gender ?? ""} className={`${INPUT} bg-white`}>
+          <select
+            name="gender"
+            defaultValue={initialData?.gender ?? ""}
+            className={`${INPUT} bg-white`}
+          >
             <option value="">Select gender</option>
             <option value="MALE">Male</option>
             <option value="FEMALE">Female</option>
@@ -93,33 +115,54 @@ export function TeacherForm({ action, initialData, mode }: TeacherFormProps) {
 
         <div>
           <label className={LABEL}>Phone</label>
-          <input type="tel" name="phone" defaultValue={initialData?.phone ?? ""}
-            className={INPUT} placeholder="+91 98765 43210" />
+          <input
+            type="tel"
+            name="phone"
+            defaultValue={initialData?.phone ?? ""}
+            className={INPUT}
+            placeholder="+91 98765 43210"
+          />
         </div>
 
         <div>
           <label className={LABEL}>Employee Code</label>
-          <input type="text" name="employeeCode" defaultValue={tp?.employeeCode ?? ""}
-            className={INPUT} placeholder="TCH-001" />
+          <input
+            type="text"
+            name="employeeCode"
+            defaultValue={tp?.employeeCode ?? ""}
+            className={INPUT}
+            placeholder="TCH-001"
+          />
         </div>
 
         <div>
           <label className={LABEL}>Qualification</label>
-          <input type="text" name="qualification" defaultValue={tp?.qualification ?? ""}
-            className={INPUT} placeholder="M.Sc Mathematics" />
+          <input
+            type="text"
+            name="qualification"
+            defaultValue={tp?.qualification ?? ""}
+            className={INPUT}
+            placeholder="M.Sc Mathematics"
+          />
         </div>
 
         <div className="md:col-span-2">
           <label className={LABEL}>Joining Date</label>
-          <input type="date" name="joiningDate" defaultValue={toDateInput(tp?.joiningDate)}
-            className={`${INPUT} max-w-xs`} />
+          <input
+            type="date"
+            name="joiningDate"
+            defaultValue={toDateInput(tp?.joiningDate)}
+            className={`${INPUT} max-w-xs`}
+          />
         </div>
       </div>
 
       {mode === "create" && (
         <p className="text-xs text-gray-400 mt-4 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
           🔑 Default login password:{" "}
-          <span className="font-mono font-semibold text-gray-600">Password@123</span>
+          <span className="font-mono font-semibold text-gray-600">
+            Password@123
+          </span>
         </p>
       )}
 
@@ -129,8 +172,10 @@ export function TeacherForm({ action, initialData, mode }: TeacherFormProps) {
           label={mode === "create" ? "Add Teacher" : "Update Teacher"}
           pendingLabel={mode === "create" ? "Adding…" : "Updating…"}
         />
-        <Link href="/school-admin/teachers"
-          className="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+        <Link
+          href="/school-admin/teachers"
+          className="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        >
           Cancel
         </Link>
       </div>
