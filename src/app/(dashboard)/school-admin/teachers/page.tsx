@@ -1,349 +1,391 @@
-import Link from "next/link";
-import { revalidatePath } from "next/cache";
+import { requireRole }   from "@/lib/session";
+import { prisma }        from "@/lib/db";
+import Link              from "next/link";
+import { StatCard }      from "@/components/dashboard/stat-card";
+import type { DayOfWeek } from "@prisma/client";
 import {
-  Pencil,
-  Plus,
-  Trash2,
-  UserRound,
-  Users,
-} from "lucide-react";
+  CalendarDays, Users, BookMarked, Clock,
+  AlertCircle, CheckCircle2, CalendarCheck,
+  Layers, ArrowRight,
+}                        from "lucide-react";
 
-import { prisma } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+export const metadata = { title: "Teacher Dashboard" };
 
-export const metadata = {
-  title: "Teachers | School ERP",
-};
+function greet(name: string | null): string {
+  const h  = new Date().getHours();
+  const t  = h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
+  const fn = name?.split(" ")[0] ?? null;
+  return `Good ${t}${fn ? `, ${fn}` : ""}`;
+}
 
-export default async function TeachersPage() {
-  const sessionUser = await requireRole(["SCHOOL_ADMIN"]);
+function todayUTC(): Date {
+  const n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+}
 
-  /*
-   * Session/JWT da schoolId stale ho sakda hai.
-   * Is karke school admin da latest schoolId database ton fetch kita ja reha hai.
-   */
-  const schoolAdmin = await prisma.user.findUnique({
-    where: {
-      id: sessionUser.id,
-    },
-    select: {
-      id: true,
-      email: true,
-      schoolId: true,
-    },
+export default async function TeacherDashboard() {
+  const user     = await requireRole(["TEACHER"]);
+  const schoolId = user.schoolId!;
+  const today    = todayUTC();
+
+  // Today's day of week
+  const DOW_JS: DayOfWeek[] = [
+    "SUNDAY" as DayOfWeek,   // index 0
+    "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY",
+  ];
+  const VALID_DAYS: DayOfWeek[] = [
+    "MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY",
+  ];
+  const rawDow    = DOW_JS[new Date().getDay()];
+  const todayDow  = rawDow && VALID_DAYS.includes(rawDow) ? rawDow : null;
+
+  // ── Teacher profile ───────────────────────────────────────────
+  const teacherProfile = await prisma.teacherProfile.findUnique({
+    where:   { userId: user.id },
+    select:  { id: true, employeeCode: true },
   });
 
-  if (!schoolAdmin) {
-    throw new Error("School administrator account was not found.");
+  if (!teacherProfile) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-500">
+            Teacher profile not found.
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Contact your school admin to set up your profile.
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  if (!schoolAdmin.schoolId) {
-    throw new Error("School administrator is not linked to a school.");
-  }
+  const tp = teacherProfile;
 
-  const schoolId = schoolAdmin.schoolId;
+  // ── Current academic year ─────────────────────────────────────
+  const currentYear = await prisma.academicYear.findFirst({
+    where:  { schoolId, isCurrent: true },
+    select: { id: true, name: true },
+  });
 
-  /*
-   * Only fetch teachers whose User.schoolId matches
-   * the currently logged-in school admin's schoolId.
-   */
-  const teachers = await prisma.teacherProfile.findMany({
-    where: {
-      user: {
+  // ── Parallel data fetch ───────────────────────────────────────
+  const [
+    todayPeriods,
+    allMySectionIds,
+    mySubjectCount,
+    markedSectionsToday,
+    mySubjects,
+  ] = await Promise.all([
+
+    // Today's periods
+    todayDow
+      ? prisma.period.findMany({
+          where: {
+            teacherProfileId: tp.id,
+            schoolId,
+            dayOfWeek: todayDow,
+            OR: currentYear
+              ? [{ academicYearId: currentYear.id }, { academicYearId: null }]
+              : [{ academicYearId: null }],
+          },
+          include: {
+            subject:  { select: { name: true, code: true } },
+            section:  { include: { class: { select: { name: true } } } },
+          },
+          orderBy: { periodNumber: "asc" },
+        })
+      : Promise.resolve([]),
+
+    // All unique sections (from periods)
+    prisma.period.findMany({
+      where:    { teacherProfileId: tp.id, schoolId },
+      distinct: ["sectionId"],
+      select:   { sectionId: true },
+    }),
+
+    // Subject count
+    prisma.teacherSubject.count({ where: { teacherProfileId: tp.id } }),
+
+    // Sections that already have attendance marked today
+    prisma.attendance.findMany({
+      where: {
         schoolId,
-        role: "TEACHER",
+        date:      today,
+        markedById: user.id,
       },
-    },
-    select: {
-      id: true,
-      userId: true,
-      employeeCode: true,
-      qualification: true,
-      // gender: true,
+      distinct: ["sectionId"],
+      select:   { sectionId: true },
+    }),
 
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          isActive: true,
-          schoolId: true,
+    // My subjects for display
+    prisma.teacherSubject.findMany({
+      where:   { teacherProfileId: tp.id },
+      include: {
+        subject: {
+          include: {
+            class: { select: { name: true } },
+          },
         },
       },
-    },
-    orderBy: {
-      user: {
-        name: "asc",
-      },
+      take: 6,
+    }),
+  ]);
+
+  const mySectionIds    = allMySectionIds.map((p) => p.sectionId);
+  const markedIds       = new Set(markedSectionsToday.map((a) => a.sectionId));
+
+  // Sections I'm responsible for but haven't marked attendance yet
+  const unmarkedSections = mySectionIds.filter((id) => !markedIds.has(id));
+
+  // Student count in my sections
+  const myStudentCount = await prisma.studentProfile.count({
+    where: {
+      sectionId: { in: mySectionIds },
+      user:      { isActive: true },
     },
   });
 
-  async function deleteTeacher(formData: FormData) {
-    "use server";
-
-    const currentSessionUser = await requireRole(["SCHOOL_ADMIN"]);
-
-    /*
-     * Again fetch latest schoolId from DB.
-     * Never trust a teacher ID directly from the form.
-     */
-    const currentSchoolAdmin = await prisma.user.findUnique({
-      where: {
-        id: currentSessionUser.id,
-      },
-      select: {
-        schoolId: true,
-      },
-    });
-
-    if (!currentSchoolAdmin?.schoolId) {
-      throw new Error("School administrator is not linked to a school.");
-    }
-
-    const teacherProfileId = formData.get("teacherProfileId");
-
-    if (
-      typeof teacherProfileId !== "string" ||
-      teacherProfileId.trim().length === 0
-    ) {
-      throw new Error("Invalid teacher ID.");
-    }
-
-    /*
-     * This ownership check prevents one school admin from
-     * deleting another school's teacher.
-     */
-    const teacher = await prisma.teacherProfile.findFirst({
-      where: {
-        id: teacherProfileId,
-        user: {
-          schoolId: currentSchoolAdmin.schoolId,
-          role: "TEACHER",
-        },
-      },
-      select: {
-        id: true,
-        userId: true,
-      },
-    });
-
-    if (!teacher) {
-      throw new Error("Teacher not found in your school.");
-    }
-
-    /*
-     * Delete the User record.
-     * TeacherProfile and related records should follow the
-     * onDelete rules defined in schema.prisma.
-     */
-    await prisma.user.delete({
-      where: {
-        id: teacher.userId,
-      },
-    });
-
-    revalidatePath("/school-admin/teachers");
-    revalidatePath("/school-admin/sections");
-    revalidatePath("/school-admin");
-  }
+  const dayName = todayDow
+    ? todayDow.charAt(0) + todayDow.slice(1).toLowerCase()
+    : "Sunday";
 
   return (
     <div className="space-y-6">
-      {/* Page heading */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Teachers</h1>
 
-          <p className="mt-1 text-sm text-gray-500">
-            {teachers.length} {teachers.length === 1 ? "teacher" : "teachers"}
+      {/* ── Greeting ─────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {greet(user.name)}
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {new Date().toLocaleDateString("en-IN", {
+              weekday: "long", day: "numeric",
+              month: "long", year: "numeric",
+            })}
+            {currentYear && (
+              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5
+                text-[11px] font-semibold bg-indigo-50 text-indigo-700
+                border border-indigo-200 rounded-full">
+                📅 {currentYear.name}
+              </span>
+            )}
           </p>
         </div>
-
-        <Link
-          href="/school-admin/teachers/new"
-          className="inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          <Plus className="h-4 w-4" />
-          Add Teacher
-        </Link>
       </div>
 
-      {/* Teachers list */}
-      {teachers.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
-              <thead className="border-b border-gray-200 bg-gray-50">
-                <tr>
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Name
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Email
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Gender
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Emp. Code
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Qualification
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Status
-                  </th>
-
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {teachers.map((teacher) => {
-                  const teacherName = teacher.user.name?.trim() || "Teacher";
-
-                  const initials = getInitials(teacherName);
-
-                  return (
-                    <tr
-                      key={teacher.id}
-                      className="transition-colors hover:bg-gray-50/70"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-50 text-sm font-semibold text-purple-600">
-                            {initials}
-                          </div>
-
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-gray-900">
-                              {teacherName}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <p className="text-sm text-gray-500">
-                          {teacher.user.email}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
-                          {/* {formatGender(teacher.gender)} */}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <p className="font-mono text-sm text-gray-600">
-                          {teacher.employeeCode || "—"}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <p className="text-sm text-gray-500">
-                          {teacher.qualification?.trim() || "—"}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={
-                            teacher.user.isActive
-                              ? "inline-flex rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700"
-                              : "inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700"
-                          }
-                        >
-                          {teacher.user.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link
-                            href={`/school-admin/teachers/${teacher.id}/edit`}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            Edit
-                          </Link>
-
-                          <form action={deleteTeacher}>
-                            <input
-                              type="hidden"
-                              name="teacherProfileId"
-                              value={teacher.id}
-                            />
-
-                            <button
-                              type="submit"
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Delete
-                            </button>
-                          </form>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {/* ── Attendance reminder ───────────────────────────────── */}
+      {unmarkedSections.length > 0 && todayDow && (
+        <div className="flex items-center justify-between gap-4 px-5 py-4
+          bg-amber-50 border border-amber-200 rounded-xl">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                Attendance not marked yet
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                {unmarkedSections.length} section
+                {unmarkedSections.length !== 1 ? "s" : ""} still need today&apos;s
+                attendance.
+              </p>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
-            <Users className="h-6 w-6 text-blue-600" />
-          </div>
-
-          <h2 className="mt-4 text-base font-semibold text-gray-900">
-            No teachers found
-          </h2>
-
-          <p className="mx-auto mt-1 max-w-sm text-sm text-gray-500">
-            Add the first teacher for your school. Teachers belonging to other
-            schools will not appear here.
-          </p>
-
           <Link
-            href="/school-admin/teachers/new"
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+            href="/teacher/attendance"
+            className="shrink-0 px-4 py-2 text-xs font-bold text-amber-800
+              bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors"
           >
-            <UserRound className="h-4 w-4" />
-            Add Teacher
+            Mark Now →
           </Link>
         </div>
       )}
+
+      {/* All sections marked */}
+      {unmarkedSections.length === 0 && mySectionIds.length > 0 && todayDow && (
+        <div className="flex items-center gap-3 px-5 py-3.5 bg-green-50
+          border border-green-200 rounded-xl">
+          <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+          <p className="text-sm font-semibold text-green-800">
+            All attendance marked for today ✓
+          </p>
+        </div>
+      )}
+
+      {/* ── Stat cards ───────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="My Students"
+          value={myStudentCount.toLocaleString("en-IN")}
+          description={`Across ${mySectionIds.length} section${mySectionIds.length !== 1 ? "s" : ""}`}
+          icon={Users}
+          href="/teacher/students"
+          color="blue"
+        />
+        <StatCard
+          title="My Sections"
+          value={mySectionIds.length}
+          description="Classes where you teach"
+          icon={Layers}
+          href="/teacher/classes"
+          color="green"
+        />
+        <StatCard
+          title="My Subjects"
+          value={mySubjectCount}
+          description="Subjects assigned to you"
+          icon={BookMarked}
+          href="/teacher/subjects"
+          color="purple"
+        />
+        <StatCard
+          title="Periods Today"
+          value={todayPeriods.length}
+          description={todayDow ? `${dayName}'s teaching schedule` : "No school on Sunday"}
+          icon={Clock}
+          color={todayPeriods.length === 0 ? "gray" : "indigo"}
+        />
+      </div>
+
+      {/* ── Today's schedule ─────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm
+        overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4
+          border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-indigo-500" />
+            <p className="text-sm font-bold text-gray-900">
+              Today&apos;s Schedule
+              <span className="ml-2 text-xs font-normal text-gray-400">
+                {dayName}
+              </span>
+            </p>
+          </div>
+          <Link
+            href="/teacher/timetable"
+            className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+          >
+            Full timetable →
+          </Link>
+        </div>
+
+        {!todayDow ? (
+          <div className="px-5 py-12 text-center">
+            <CalendarDays className="w-9 h-9 text-gray-200 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500">
+              It&apos;s Sunday — no classes today
+            </p>
+          </div>
+        ) : todayPeriods.length === 0 ? (
+          <div className="px-5 py-12 text-center">
+            <CalendarDays className="w-9 h-9 text-gray-200 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-500">
+              No periods scheduled for today
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {todayPeriods.map((period) => {
+              const sectionLabel = `${period.section.class.name} — Section ${period.section.name}`;
+              const alreadyMarked = markedIds.has(period.sectionId);
+              return (
+                <div key={period.id} className="flex items-center gap-4 px-5 py-4
+                  hover:bg-gray-50/50 transition-colors">
+
+                  {/* Period number */}
+                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center
+                    justify-center shrink-0">
+                    <span className="text-sm font-black text-indigo-700">
+                      P{period.periodNumber}
+                    </span>
+                  </div>
+
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-900">
+                      {period.subject?.name ?? "Free Period"}
+                      {period.subject?.code && (
+                        <span className="ml-1.5 text-xs font-mono text-gray-400">
+                          ({period.subject.code})
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{sectionLabel}</p>
+                  </div>
+
+                  {/* Time */}
+                  {(period.startTime || period.endTime) && (
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-mono font-semibold text-gray-700">
+                        {period.startTime}
+                        {period.startTime && period.endTime ? "–" : ""}
+                        {period.endTime}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Attendance status */}
+                  {alreadyMarked ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1
+                      text-[10px] font-bold bg-green-50 text-green-700
+                      border border-green-200 rounded-full shrink-0">
+                      <CheckCircle2 className="w-2.5 h-2.5" />
+                      Marked
+                    </span>
+                  ) : (
+                    <Link
+                      href={`/teacher/attendance?sectionId=${period.sectionId}&date=${today.toISOString().split("T")[0]}`}
+                      className="inline-flex items-center gap-1 px-2 py-1
+                        text-[10px] font-bold bg-amber-50 text-amber-700
+                        border border-amber-200 rounded-full hover:bg-amber-100
+                        transition-colors shrink-0"
+                    >
+                      <CalendarCheck className="w-2.5 h-2.5" />
+                      Mark
+                    </Link>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── My subjects quick view ────────────────────────────── */}
+      {mySubjects.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm
+          overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4
+            border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <BookMarked className="w-4 h-4 text-purple-500" />
+              <p className="text-sm font-bold text-gray-900">My Subjects</p>
+            </div>
+            <Link
+              href="/teacher/subjects"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+            >
+              View all →
+            </Link>
+          </div>
+          <div className="flex flex-wrap gap-2 p-5">
+            {mySubjects.map((ts) => (
+              <span
+                key={ts.id}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5
+                  text-xs font-semibold bg-purple-50 text-purple-800
+                  border border-purple-100 rounded-full"
+              >
+                {ts.subject.name}
+                <span className="text-purple-500 font-normal">
+                  · {ts.subject.class.name}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   );
-}
-
-function getInitials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-}
-
-function formatGender(gender: string | null) {
-  if (!gender) {
-    return "Not specified";
-  }
-
-  return gender
-    .toLowerCase()
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
