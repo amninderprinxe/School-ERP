@@ -10,11 +10,11 @@ export interface NavItem {
 export const NAV_CONFIG: Record<Role, NavItem[]> = {
 
   SUPER_ADMIN: [
-    { label: "Dashboard", href: "/super-admin",           icon: "LayoutDashboard", exactMatch: true },
-    { label: "Schools",   href: "/super-admin/schools",   icon: "Building2" },
-    { label: "All Users", href: "/super-admin/users",     icon: "Users" },
+    { label: "Dashboard", href: "/super-admin",            icon: "LayoutDashboard", exactMatch: true },
+    { label: "Schools",   href: "/super-admin/schools",    icon: "Building2" },
+    { label: "All Users", href: "/super-admin/users",      icon: "Users" },
     { label: "Audit Log", href: "/super-admin/audit-logs", icon: "ShieldCheck" },
-    { label: "Settings",  href: "/settings",              icon: "Settings" },
+    { label: "Settings",  href: "/settings",               icon: "Settings" },
   ],
 
   SCHOOL_ADMIN: [
@@ -26,11 +26,13 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Sections",       href: "/school-admin/sections",       icon: "Layers" },
     { label: "Subjects",       href: "/school-admin/subjects",       icon: "BookMarked" },
     { label: "Timetable",      href: "/school-admin/timetable",      icon: "CalendarDays" },
-    { label: "Holidays",       href: "/school-admin/holidays",       icon: "CalendarOff" },  // ← NEW
+    { label: "Holidays",       href: "/school-admin/holidays",       icon: "CalendarOff" },
+    { label: "PTM",            href: "/school-admin/ptm",            icon: "CalendarClock" },
     { label: "Exams",          href: "/school-admin/exams",          icon: "ClipboardList" },
     { label: "Results",        href: "/school-admin/results",        icon: "ClipboardCheck" },
     { label: "Attendance",     href: "/school-admin/attendance",     icon: "CalendarCheck" },
     { label: "Fees",           href: "/school-admin/fees",           icon: "Wallet" },
+    { label: "Promote",        href: "/school-admin/promote",        icon: "TrendingUp" },  // ← NEW
     { label: "Import",         href: "/school-admin/import",         icon: "Upload" },
     { label: "Audit Log",      href: "/school-admin/audit-logs",     icon: "ShieldCheck" },
     { label: "Announcements",  href: "/school-admin/announcements",  icon: "Megaphone" },
@@ -40,6 +42,7 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "Dashboard",   href: "/teacher",            icon: "LayoutDashboard", exactMatch: true },
     { label: "Timetable",   href: "/teacher/timetable",  icon: "CalendarDays" },
     { label: "Attendance",  href: "/teacher/attendance", icon: "CalendarCheck" },
+    { label: "PTM",         href: "/teacher/ptm",        icon: "CalendarClock" },
     { label: "Results",     href: "/teacher/results",    icon: "ClipboardCheck" },
     { label: "My Classes",  href: "/teacher/classes",    icon: "BookOpen" },
     { label: "My Subjects", href: "/teacher/subjects",   icon: "BookMarked" },
@@ -60,6 +63,7 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { label: "My Children", href: "/parent/children",    icon: "Baby" },
     { label: "Timetable",   href: "/parent/timetable",   icon: "CalendarDays" },
     { label: "Attendance",  href: "/parent/attendance",  icon: "CalendarCheck" },
+    { label: "PTM",         href: "/parent/ptm",         icon: "CalendarClock" },
     { label: "Results",     href: "/parent/results",     icon: "Award" },
     { label: "Fees",        href: "/parent/fees",        icon: "Wallet" },
   ],
