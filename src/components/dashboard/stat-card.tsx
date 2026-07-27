@@ -1,73 +1,79 @@
+import Link              from "next/link";
 import type { LucideIcon } from "lucide-react";
 
-type Color = "blue" | "green" | "purple" | "orange" | "indigo" | "rose" | "teal";
+type Color =
+  | "blue" | "green" | "amber" | "red"
+  | "purple" | "indigo" | "emerald" | "rose" | "gray";
 
-interface StatCardProps {
-  title: string;
-  value: string | number;
+interface Props {
+  title:        string;
+  value:        string | number;
   description?: string;
-  icon: LucideIcon;
-  color?: Color;
-  trend?: {
-    value: number;
-    direction: "up" | "down";
-    label: string;
-  };
+  icon:         LucideIcon;
+  href?:        string;
+  color?:       Color;
+  badge?:       { label: string; color: "green" | "amber" | "red" | "blue" | "gray" };
 }
 
-const COLOR_MAP: Record<Color, { bg: string; iconBg: string; iconText: string; ring: string }> = {
-  blue:   { bg: "bg-blue-50",   iconBg: "bg-blue-600",   iconText: "text-white", ring: "ring-blue-100"   },
-  green:  { bg: "bg-green-50",  iconBg: "bg-green-600",  iconText: "text-white", ring: "ring-green-100"  },
-  purple: { bg: "bg-purple-50", iconBg: "bg-purple-600", iconText: "text-white", ring: "ring-purple-100" },
-  orange: { bg: "bg-orange-50", iconBg: "bg-orange-500", iconText: "text-white", ring: "ring-orange-100" },
-  indigo: { bg: "bg-indigo-50", iconBg: "bg-indigo-600", iconText: "text-white", ring: "ring-indigo-100" },
-  rose:   { bg: "bg-rose-50",   iconBg: "bg-rose-600",   iconText: "text-white", ring: "ring-rose-100"   },
-  teal:   { bg: "bg-teal-50",   iconBg: "bg-teal-600",   iconText: "text-white", ring: "ring-teal-100"   },
+const C: Record<Color, { bg: string; icon: string; val: string }> = {
+  blue:    { bg: "bg-blue-50",    icon: "text-blue-600",    val: "text-blue-700"    },
+  green:   { bg: "bg-green-50",   icon: "text-green-600",   val: "text-green-700"   },
+  amber:   { bg: "bg-amber-50",   icon: "text-amber-600",   val: "text-amber-700"   },
+  red:     { bg: "bg-red-50",     icon: "text-red-600",     val: "text-red-700"     },
+  purple:  { bg: "bg-purple-50",  icon: "text-purple-600",  val: "text-purple-700"  },
+  indigo:  { bg: "bg-indigo-50",  icon: "text-indigo-600",  val: "text-indigo-700"  },
+  emerald: { bg: "bg-emerald-50", icon: "text-emerald-600", val: "text-emerald-700" },
+  rose:    { bg: "bg-rose-50",    icon: "text-rose-600",    val: "text-rose-700"    },
+  gray:    { bg: "bg-gray-50",    icon: "text-gray-500",    val: "text-gray-700"    },
+};
+
+const BADGE_C = {
+  green: "bg-green-100 text-green-700",
+  amber: "bg-amber-100 text-amber-700",
+  red:   "bg-red-100   text-red-700",
+  blue:  "bg-blue-100  text-blue-700",
+  gray:  "bg-gray-100  text-gray-600",
 };
 
 export function StatCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-  color = "blue",
-  trend,
-}: StatCardProps) {
-  const c = COLOR_MAP[color];
+  title, value, description, icon: Icon, href, color = "blue", badge,
+}: Props) {
+  const c = C[color];
 
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-shadow duration-200">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-500 truncate">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">
-            {value}
+  const inner = (
+    <div
+      className={`bg-white rounded-xl border border-gray-100 shadow-sm p-5
+        flex items-start justify-between gap-4 h-full
+        ${href ? "hover:shadow-md hover:border-gray-200 transition-all duration-200" : ""}`}
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider leading-none">
+          {title}
+        </p>
+        <p className={`text-3xl font-black mt-2 leading-none ${c.val}`}>
+          {value}
+        </p>
+        {description && (
+          <p className="text-xs text-gray-400 mt-2 leading-snug line-clamp-2">
+            {description}
           </p>
-        </div>
-        {/* Icon badge */}
-        <div className={`${c.bg} ${c.iconBg} ring-4 ${c.ring} p-2.5 rounded-xl shrink-0`}>
-          <Icon className={`w-5 h-5 ${c.iconText}`} />
-        </div>
+        )}
+        {badge && (
+          <span
+            className={`inline-flex mt-2 px-2 py-0.5 text-[10px] font-bold
+              rounded-full ${BADGE_C[badge.color]}`}
+          >
+            {badge.label}
+          </span>
+        )}
       </div>
-
-      {(description || trend) && (
-        <div className="flex items-center gap-2 flex-wrap">
-          {trend && (
-            <span
-              className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                trend.direction === "up"
-                  ? "bg-green-50 text-green-700"
-                  : "bg-red-50 text-red-600"
-              }`}
-            >
-              {trend.direction === "up" ? "↑" : "↓"} {trend.value}%
-            </span>
-          )}
-          {description && (
-            <span className="text-xs text-gray-400">{description}</span>
-          )}
-        </div>
-      )}
+      <div className={`${c.bg} w-11 h-11 rounded-xl flex items-center
+        justify-center shrink-0`}>
+        <Icon className={`w-5 h-5 ${c.icon}`} />
+      </div>
     </div>
   );
+
+  if (href) return <Link href={href} className="block h-full">{inner}</Link>;
+  return inner;
 }
