@@ -1,5 +1,5 @@
 "use client";
-
+import dynamic from "next/dynamic";
 import { useRef, useState, useCallback, useEffect } from "react";
 
 import FullCalendar from "@fullcalendar/react";
@@ -10,7 +10,6 @@ import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 
 import type { EventInput } from "@fullcalendar/core";
-
 import { motion, AnimatePresence } from "framer-motion";
 
 import {
@@ -283,6 +282,20 @@ export function CalendarClient({ role, canCreate }: Props) {
 
     [activeTypes],
   );
+
+  // ============================================================
+  // FULL CALENDAR DYNAMIC IMPORT
+  // ============================================================
+  
+  const FullCalendar = dynamic(() => import("@fullcalendar/react"), {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center min-h-[400px] bg-white rounded-xl">
+        <Loader2 className="w-7 h-7 text-blue-600 animate-spin mb-2" />
+        <p className="text-xs text-gray-500">Rendering Calendar...</p>
+      </div>
+    ),
+  });
 
   // ============================================================
   // REFRESH EVENTS
@@ -820,8 +833,8 @@ export function CalendarClient({ role, canCreate }: Props) {
                       style={
                         active
                           ? {
-                              backgroundColor: type.color,
-                            }
+                            backgroundColor: type.color,
+                          }
                           : {}
                       }
                     >
