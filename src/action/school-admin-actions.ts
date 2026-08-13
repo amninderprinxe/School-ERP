@@ -3,6 +3,7 @@
 
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { revalidatePath } from "next/cache";
 
 // Standard Default Password
 const DEFAULT_INITIAL_PASSWORD = "Password@123";
