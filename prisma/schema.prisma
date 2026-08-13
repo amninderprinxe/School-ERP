@@ -591,10 +591,10 @@ enum SchoolStatus {
 }
 
 // enum PtmStatus {
-  SCHEDULED
-  COMPLETED
-  CANCELLED
-}
+//  SCHEDULED
+//  COMPLETED
+//  CANCELLED
+// }
 
 enum Gender {
   MALE
