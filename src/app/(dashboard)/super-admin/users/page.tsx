@@ -4,6 +4,9 @@ import { ResetPasswordButton } from "@/components/ui/reset-password-button";
 import { Users } from "lucide-react";
 import type { Role } from "@prisma/client";
 
+// 🔴 FIX 1: Force dynamic rendering to prevent static caching on Vercel
+export const dynamic = "force-dynamic";
+
 export const metadata = { title: "All Users" };
 
 const ROLES: Role[] = [
@@ -55,8 +58,8 @@ export default async function SuperAdminUsersPage({ searchParams }: Props) {
     ...(schoolFilter && { schoolId: schoolFilter }),
     ...(query && {
       OR: [
-        { name: { contains: query } },
-        { email: { contains: query } },
+        { name: { contains: query, mode: "insensitive" as const } },
+        { email: { contains: query, mode: "insensitive" as const } },
       ],
     }),
   };
@@ -68,7 +71,8 @@ export default async function SuperAdminUsersPage({ searchParams }: Props) {
       include: {
         school: { select: { name: true } },
       },
-      orderBy: [{ role: "asc" }, { name: "asc" }],
+      // 🔴 FIX 2: Sort by latest created first so new users appear at the top
+      orderBy: { createdAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -87,7 +91,7 @@ export default async function SuperAdminUsersPage({ searchParams }: Props) {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">All Users</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          {users.length} user{users.length !== 1 ? "s" : ""} found
+          {totalCount} user{totalCount !== 1 ? "s" : ""} found
           {roleFilter && ` · Role: ${formatRoleLabel(roleFilter)}`}
           {schoolFilter && ` · Filtered by school`}
           {query && ` · Search: "${query}"`}
@@ -302,7 +306,6 @@ export default async function SuperAdminUsersPage({ searchParams }: Props) {
               </div>
             )}
 
-            {/* Limit notice */}
             {users.length >= 200 && (
               <p className="text-center text-xs text-gray-400 py-3
                 border-t border-gray-50">
