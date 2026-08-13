@@ -263,24 +263,29 @@ export function logAction(params: LogActionParams): void {
   prisma.auditLog
     .create({
       data: {
-        userId: String(params.userId),
-        userRole: String(params.userRole),
-        userName: String(params.userName),
+        userId: params.userId,
+        userRole: params.userRole,
+        userName: params.userName,
 
-        schoolId: params.schoolId ? String(params.schoolId) : null,
-        schoolName: params.schoolName ? String(params.schoolName) : null,
+        schoolId: params.schoolId ?? null,
+        schoolName: params.schoolName ?? null,
 
-        action: String(params.action),
+        action: params.action,
 
-        entity: String(params.entity),
-        entityId: params.entityId ? String(params.entityId) : null,
-        entityName: params.entityName ? String(params.entityName) : null,
+        entity: params.entity,
+        entityId: params.entityId ?? null,
+        entityName: params.entityName ?? null,
 
-        metadata: params.metadata ? (params.metadata as Prisma.InputJsonValue) : undefined,
+        ...(params.metadata
+          ? { metadata: params.metadata as Prisma.InputJsonValue }
+          : {}),
       },
     })
     .catch((error) => {
-      console.error("[audit] Failed to write log:", error);
+      console.error(
+        "[audit] Failed to write log:",
+        error,
+      );
     });
 }
 
