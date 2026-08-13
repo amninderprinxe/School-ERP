@@ -2,6 +2,7 @@ import type { Metadata }   from "next";
 import { Inter }           from "next/font/google";
 import "./globals.css";
 import { Providers }       from "@/components/providers";
+import { SpeedInsights }   from "@vercel/speed-insights/next";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -22,6 +23,7 @@ export default function RootLayout({
         {/* Providers is typed in a way that gives a void return type in this project setup; ignore TS here */}
         {/* @ts-ignore */}
         <Providers>{children}</Providers>
+        <SpeedInsights />
       </body>
     </html>
   );
