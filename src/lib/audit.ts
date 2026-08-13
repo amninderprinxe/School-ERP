@@ -260,7 +260,7 @@ export interface LogActionParams {
 }
 
 export function logAction(params: LogActionParams): void {
-  const auditData: Prisma.AuditLogUncheckedCreateInput = {
+  const auditData = {
     userId: params.userId,
     userRole: params.userRole,
     userName: params.userName,
@@ -270,12 +270,12 @@ export function logAction(params: LogActionParams): void {
     entity: params.entity,
     entityId: params.entityId ?? null,
     entityName: params.entityName ?? null,
-    metadata: params.metadata ? (params.metadata as Prisma.InputJsonValue) : undefined,
+    ...(params.metadata ? { metadata: params.metadata as Prisma.InputJsonValue } : {}),
   };
 
   prisma.auditLog
     .create({
-      data: auditData,
+      data: auditData as any,
     })
     .catch((error) => {
       console.error(
