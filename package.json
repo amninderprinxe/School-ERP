@@ -48,7 +48,6 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
-    "@types/bcryptjs": "^3.0.0",
     "@types/node": "latest",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "latest",
