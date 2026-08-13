@@ -78,12 +78,24 @@ export async function createSchool(
     const adminEmail = String(formData.get("adminEmail") || "")
       .trim()
       .toLowerCase();
-    
-    // Default password "Password@123" fallback if not provided in form
-    const rawAdminPassword = String(formData.get("adminPassword") || "").trim() || "Password@123"; 
+
+    // 🔴 STAGE 1: Admin details validation (Mandatory Check)
+    if (!adminName || !adminEmail) {
+      return {
+        success: false,
+        error: "School Admin Name and Email are strictly required!",
+        fieldErrors: {
+          adminName: !adminName ? ["Admin name is required."] : undefined,
+          adminEmail: !adminEmail ? ["Admin email is required."] : undefined,
+        },
+      };
+    }
+
+    // Default password "Password@123" fallback
+    const rawAdminPassword = String(formData.get("adminPassword") || "").trim() || "Password@123";
     const hashedPassword = await bcrypt.hash(rawAdminPassword, 10);
 
-    // Execute School + School Admin User creation in a single transaction
+    // 🔴 STAGE 2: Create School and Admin in a single transactio
     const createdSchool = await prisma.$transaction(async (tx) => {
       // 1. Create School
       const school = await tx.school.create({
@@ -106,20 +118,18 @@ export async function createSchool(
         },
       });
 
-      // 2. Create School Admin if adminName & adminEmail are provided
-      if (adminEmail && adminName) {
-        await tx.user.create({
-          data: {
-            name: adminName,
-            email: adminEmail,
-            loginId: adminEmail, // Email used as username / loginId
-            password: hashedPassword,
-            role: "SCHOOL_ADMIN",
-            schoolId: school.id,
-            isActive: true,
-          },
-        });
-      }
+      // 2. Create School Admin User linked to this school
+      await tx.user.create({
+        data: {
+          name: adminName,
+          email: adminEmail,
+          loginId: adminEmail, // Strictly Email as username
+          password: hashedPassword,
+          role: "SCHOOL_ADMIN",
+          schoolId: school.id,
+          isActive: true,
+        },
+      });
 
       return school;
     });
@@ -155,11 +165,9 @@ export async function createSchool(
     ) {
       return {
         success: false,
-        error: "A school with this slug or an user with this email already exists.",
+        error: "A school with this slug or a user with this email already exists.",
         fieldErrors: {
-          slug: [
-            "Slug must be globally unique. Choose a different one.",
-          ],
+          slug: ["Slug or Admin Email must be globally unique."],
         },
       };
     }

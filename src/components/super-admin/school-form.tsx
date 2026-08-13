@@ -208,6 +208,72 @@ export function SchoolForm({ action, initialData, mode }: SchoolFormProps) {
           )}
         </div>
 
+        {/* ── School Admin Account Details (CREATE MODE ONLY) ───── */}
+        {mode === "create" && (
+          <div className="mt-8 pt-6 border-t border-gray-100 space-y-4">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">
+                School Admin Credentials
+              </h3>
+              <p className="text-xs text-gray-500">
+                This account will manage this school's dashboard.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Admin Name */}
+              <div>
+                <label className={LABEL}>
+                  Admin Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="adminName"
+                  required
+                  placeholder="e.g. Principal Sharma"
+                  className={INPUT}
+                />
+                {fe.adminName && (
+                  <p className="text-xs text-red-500 mt-1">{fe.adminName[0]}</p>
+                )}
+              </div>
+
+              {/* Admin Email */}
+              <div>
+                <label className={LABEL}>
+                  Admin Login Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="adminEmail"
+                  required
+                  placeholder="admin@school.com"
+                  className={INPUT}
+                />
+                {fe.adminEmail && (
+                  <p className="text-xs text-red-500 mt-1">{fe.adminEmail[0]}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Optional Password Field */}
+            <div>
+              <label className={LABEL}>
+                Initial Password{" "}
+                <span className="text-xs font-normal text-gray-400">
+                  (Default: Password@123)
+                </span>
+              </label>
+              <input
+                type="text"
+                name="adminPassword"
+                defaultValue="Password@123"
+                className={INPUT}
+              />
+            </div>
+          </div>
+        )}
+
         {/* ── Status (edit mode only) ───────────────────── */}
         {mode === "edit" && (
           <div>
@@ -237,11 +303,8 @@ export function SchoolForm({ action, initialData, mode }: SchoolFormProps) {
       {/* ── Footer ────────────────────────────────────────── */}
       <div className="flex items-center gap-3 mt-8 pt-6 border-t border-gray-100">
         <SubmitButton>
-
           {mode === "create" ? "Create School" : "Update School"}
         </SubmitButton>
-
-
 
         <Link
           href="/super-admin/schools"
