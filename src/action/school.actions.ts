@@ -31,10 +31,11 @@ async function safelyLogAction(
 function revalidateSchoolPages() {
   revalidatePath(REVALIDATE);
   revalidatePath("/super-admin");
+  revalidatePath("/super-admin/users"); // <-- Ensure Users table revalidates immediately
 }
 
 // ─────────────────────────────────────────────────────────────────
-// CREATE SCHOOL
+// CREATE SCHOOL & ADMIN (FIXED)
 // ─────────────────────────────────────────────────────────────────
 
 export async function createSchool(
@@ -73,69 +74,55 @@ export async function createSchool(
     const cleanPhone = phone?.trim() || null;
     const cleanAddress = address?.trim() || null;
 
-    const createdSchool = await prisma.school.create({
-      data: {
-        name: cleanName,
-        slug: cleanSlug,
-        email: cleanEmail,
-        phone: cleanPhone,
-        address: cleanAddress,
-        status: "ACTIVE",
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        email: true,
-        phone: true,
-        address: true,
-        status: true,
-      },
-    });
-
     const adminName = String(formData.get("adminName") || "").trim();
     const adminEmail = String(formData.get("adminEmail") || "")
-    .trim()
-    .toLowerCase();
-     const adminPassword = String(formData.get("adminPassword") || ""); 
-     const hashedPassword = await bcrypt.hash(adminPassword, 12);
-     
-     const result = await prisma.$transaction(async (tx) => {   
-      
-        const school = await tx.school.create({
-           data: { 
-              name: cleanName,
-              slug: cleanSlug, 
-              email: cleanEmail, 
-              phone: cleanPhone, 
-              address: cleanAddress, 
-              status: "ACTIVE", 
-            },
-             select: { 
-                id: true,
-                name: true, 
-                slug: true, 
-                email: true, 
-                phone: true, 
-                address: true, 
-                status: true, 
-              }, 
-            }); 
-            
-            await tx.user.create({ 
-                data: { 
-                    name: adminName, 
-                    email: adminEmail, 
-                    password: hashedPassword, 
-                    role: "SCHOOL_ADMIN", 
-                    schoolId: school.id, 
-                    isActive: true, 
-                    },
-                  }); 
-                  
-                  return school; 
-            });
+      .trim()
+      .toLowerCase();
+    
+    // Default password "Password@123" fallback if not provided in form
+    const rawAdminPassword = String(formData.get("adminPassword") || "").trim() || "Password@123"; 
+    const hashedPassword = await bcrypt.hash(rawAdminPassword, 10);
 
+    // Execute School + School Admin User creation in a single transaction
+    const createdSchool = await prisma.$transaction(async (tx) => {
+      // 1. Create School
+      const school = await tx.school.create({
+        data: {
+          name: cleanName,
+          slug: cleanSlug,
+          email: cleanEmail,
+          phone: cleanPhone,
+          address: cleanAddress,
+          status: "ACTIVE",
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          email: true,
+          phone: true,
+          address: true,
+          status: true,
+        },
+      });
+
+      // 2. Create School Admin if adminName & adminEmail are provided
+      if (adminEmail && adminName) {
+        await tx.user.create({
+          data: {
+            name: adminName,
+            email: adminEmail,
+            loginId: adminEmail, // Email used as username / loginId
+            password: hashedPassword,
+            role: "SCHOOL_ADMIN",
+            schoolId: school.id,
+            isActive: true,
+          },
+        });
+      }
+
+      return school;
+    });
 
     await safelyLogAction({
       userId: user.id,
@@ -159,7 +146,7 @@ export async function createSchool(
 
     return {
       success: true,
-      message: "School created successfully.",
+      message: "School and Admin created successfully.",
     };
   } catch (error) {
     if (
@@ -168,7 +155,7 @@ export async function createSchool(
     ) {
       return {
         success: false,
-        error: "A school with this slug already exists.",
+        error: "A school with this slug or an user with this email already exists.",
         fieldErrors: {
           slug: [
             "Slug must be globally unique. Choose a different one.",
@@ -419,7 +406,6 @@ export async function toggleSchoolStatus(
 
 // ─────────────────────────────────────────────────────────────────
 // DELETE SCHOOL
-// Warning: all related school data may be deleted by cascade.
 // ─────────────────────────────────────────────────────────────────
 
 export async function deleteSchool(
@@ -459,12 +445,6 @@ export async function deleteSchool(
       };
     }
 
-    /*
-     * Audit log is created before deleting the school.
-     *
-     * Since schoolId is null for SUPER_ADMIN logs, the audit record
-     * will not be removed by the school's cascade deletion.
-     */
     await safelyLogAction({
       userId: user.id,
       userRole: user.role,
