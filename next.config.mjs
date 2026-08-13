@@ -1,5 +1,4 @@
-
-/** @type {import('next').NextType} */
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: [
     "@fullcalendar/common",
@@ -10,6 +9,4 @@ const nextConfig = {
   ],
 };
 
-
 export default nextConfig;
-
