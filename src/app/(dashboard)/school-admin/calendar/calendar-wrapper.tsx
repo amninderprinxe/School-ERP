@@ -2,27 +2,32 @@
 
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
+import type { ComponentType } from "react";
 
+interface CalendarWrapperProps {
+  role: string;
+  canCreate: boolean;
+}
+
+// 🔴 FIX: Cast inside .then() so dynamic() accepts the loader cleanly
 const CalendarClient = dynamic(
   () =>
     import("@/components/calendar/calendar-client").then(
-      (m) => m.CalendarClient
+      (mod) => mod.CalendarClient as unknown as ComponentType<CalendarWrapperProps>
     ),
   {
     ssr: false,
     loading: () => (
-      <div className="flex flex-col items-center justify-center gap-4 py-32">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-        <p className="text-sm text-gray-500 font-medium">
-          Loading calendar…
+      <div className="flex flex-col items-center justify-center min-h-[420px] bg-white rounded-2xl border border-gray-100 p-8 shadow-sm">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
+        <p className="text-sm font-medium text-gray-500">
+          Loading Calendar...
         </p>
       </div>
     ),
   }
 );
 
-type AnyProps = Record<string, any>;
-
-export function CalendarWrapper(props: AnyProps) {
-  return <CalendarClient {...(props as any)} />;
+export function CalendarWrapper({ role, canCreate }: CalendarWrapperProps) {
+  return <CalendarClient role={role} canCreate={canCreate} />;
 }
