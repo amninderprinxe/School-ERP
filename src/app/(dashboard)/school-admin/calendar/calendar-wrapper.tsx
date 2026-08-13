@@ -9,7 +9,6 @@ interface CalendarWrapperProps {
   canCreate: boolean;
 }
 
-// 🔴 FIX: Cast inside .then() so dynamic() accepts the loader cleanly
 const CalendarClient = dynamic(
   () =>
     import("@/components/calendar/calendar-client").then(
