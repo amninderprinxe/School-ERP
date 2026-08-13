@@ -103,7 +103,7 @@ const SCHOOL_ADMIN_NAV: NavGroupDef[] = [
     items: [
       { label: "Attendance", href: "/school-admin/attendance", icon: CalendarCheck },
       { label: "Holidays", href: "/school-admin/holidays", icon: CalendarOff },
-      { label: "PTM", href: "/school-admin/ptm", icon: CalendarClock },
+    //  { label: "PTM", href: "/school-admin/ptm", icon: CalendarClock },
       { label: "Promote", href: "/school-admin/promote", icon: TrendingUp },
     ],
   },
@@ -189,7 +189,7 @@ const TEACHER_NAV: NavGroupDef[] = [
       { label: "Timetable", href: "/teacher/timetable", icon: CalendarDays },
       { label: "Attendance", href: "/teacher/attendance", icon: CalendarCheck },
       { label: "Results", href: "/teacher/results", icon: ClipboardCheck },
-      { label: "PTM", href: "/teacher/ptm", icon: CalendarClock },
+      // { label: "PTM", href: "/teacher/ptm", icon: CalendarClock },
     ],
   },
   {

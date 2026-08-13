@@ -284,7 +284,7 @@ export function logAction(
         entityName: params.entityName ?? null,
 
         metadata: params.metadata
-          ? (params.metadata as Prisma.InputJsonValue)
+          ? (params.metadata as unknown as Prisma.InputJsonValue)
           : Prisma.JsonNull,
       },
     })
