@@ -1,35 +1,36 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sidebar }            from "./sidebar";
-import { Topbar }              from "./topbar";
-import { CommandPalette }      from "@/components/command-palette/command-palette";
-import type { Role }           from "@prisma/client";
+import { Sidebar } from "./sidebar";
+import { Topbar } from "./topbar";
+import { CommandPalette } from "@/components/command-palette/command-palette";
+import type { Role } from "@prisma/client";
 
 export interface ShellUser {
-  id:                  string;
-  name?:               string | null;
-  email?:              string | null;
-  role:                Role;
-  schoolId:            string | null;
-  avatarUrl?:          string | null;
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  role: Role;
+  schoolId: string | null;
+  avatarUrl?: string | null;
+  unreadNotificationCount?: number;
   currentAcademicYear?: { id: string; name: string } | null;
 }
 
 interface Props {
-  user:                  ShellUser;
-  children:              React.ReactNode;
-  currentAcademicYear?:  { id: string; name: string } | null;
+  user: ShellUser;
+  children: React.ReactNode;
+  currentAcademicYear?: { id: string; name: string } | null;
   unreadNotificationCount?: number;
 }
 
 const LS_COLLAPSE_KEY = "campus-x-sidebar-collapsed";
 
 export function DashboardShell({ user, children, currentAcademicYear, unreadNotificationCount }: Props) {
-  const [mobileOpen,  setMobileOpen]  = useState(false);
-  const [collapsed,   setCollapsed]   = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [mounted,     setMounted]     = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     try {

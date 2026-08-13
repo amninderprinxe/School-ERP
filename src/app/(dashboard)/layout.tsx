@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic';
-
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
@@ -10,12 +8,14 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  try {
-    const session = await auth();
-    if (!session?.user) {
-      redirect("/login");
-    }
+  const session = await auth();
 
+  // 1. Check user and user.id both safely
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  try {
     const dbUser = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
@@ -32,6 +32,7 @@ export default async function DashboardLayout({
       redirect("/login");
     }
 
+    // 2. Fetch academic year and notifications in parallel
     const [currentAcademicYear, unreadNotificationCount] = await Promise.all([
       dbUser.schoolId
         ? prisma.academicYear.findFirst({
@@ -46,26 +47,19 @@ export default async function DashboardLayout({
     ]);
 
     return (
-      <DashboardShell 
-        user={dbUser} 
-        currentAcademicYear={currentAcademicYear} 
-        unreadNotificationCount={unreadNotificationCount}
+      <DashboardShell
+        user={{
+          ...dbUser,
+          currentAcademicYear: currentAcademicYear ?? null,
+          unreadNotificationCount,
+        }}
       >
         {children}
       </DashboardShell>
     );
-  } catch (error: any) {
-    // Je redirect error hove taan usnu throw hin dena zaroori hai Next.js routing layi
-    if (error?.message?.includes('NEXT_REDIRECT')) {
-      throw error;
-    }
-    
+  } catch (error) {
     console.error("Dashboard Layout Error:", error);
-    return (
-      <div style={{ padding: "40px", color: "red", fontFamily: "sans-serif" }}>
-        <h2>Server Error in Dashboard Layout:</h2>
-        <pre>{error?.message || JSON.stringify(error, null, 2)}</pre>
-      </div>
-    );
+    // Safe fallback if database connection or query fails
+    redirect("/login");
   }
 }
