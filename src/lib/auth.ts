@@ -65,6 +65,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
 
+        console.log("Database fetch result:", user);  //temp
+
         if (!user) {
           return null;
         }

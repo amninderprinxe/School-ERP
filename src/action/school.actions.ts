@@ -2,7 +2,7 @@
 
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import {
@@ -92,6 +92,50 @@ export async function createSchool(
         status: true,
       },
     });
+
+    const adminName = String(formData.get("adminName") || "").trim();
+    const adminEmail = String(formData.get("adminEmail") || "")
+    .trim()
+    .toLowerCase();
+     const adminPassword = String(formData.get("adminPassword") || ""); 
+     const hashedPassword = await bcrypt.hash(adminPassword, 12);
+     
+     const result = await prisma.$transaction(async (tx) => {   
+      
+        const school = await tx.school.create({
+           data: { 
+              name: cleanName,
+              slug: cleanSlug, 
+              email: cleanEmail, 
+              phone: cleanPhone, 
+              address: cleanAddress, 
+              status: "ACTIVE", 
+            },
+             select: { 
+                id: true,
+                name: true, 
+                slug: true, 
+                email: true, 
+                phone: true, 
+                address: true, 
+                status: true, 
+              }, 
+            }); 
+            
+            await tx.user.create({ 
+                data: { 
+                    name: adminName, 
+                    email: adminEmail, 
+                    password: hashedPassword, 
+                    role: "SCHOOL_ADMIN", 
+                    schoolId: school.id, 
+                    isActive: true, 
+                    },
+                  }); 
+                  
+                  return school; 
+            });
+
 
     await safelyLogAction({
       userId: user.id,
