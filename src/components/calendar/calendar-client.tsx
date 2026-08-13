@@ -1,12 +1,6 @@
 "use client";
-import dynamic from "next/dynamic";
+
 import { useRef, useState, useCallback, useEffect } from "react";
-
-import dayGridPlugin from "@fullcalendar/daygrid";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import listPlugin from "@fullcalendar/list";
-import interactionPlugin from "@fullcalendar/interaction";
-
 import type { EventInput } from "@fullcalendar/core";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -35,17 +29,6 @@ import { cn } from "@/lib/utils";
 import { AddEventModal } from "./add-event-modal";
 import type { Role } from "@prisma/client";
 
-// 🔴 TOP-LEVEL DYNAMIC IMPORT (MUST BE OUTSIDE THE COMPONENT FUNCTION)
-const FullCalendar = dynamic(() => import("@fullcalendar/react"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex flex-col items-center justify-center min-h-[400px] bg-white rounded-xl">
-      <Loader2 className="w-7 h-7 text-blue-600 animate-spin mb-2" />
-      <p className="text-xs text-gray-500">Rendering Calendar...</p>
-    </div>
-  ),
-});
-
 // ============================================================
 // EVENT MODAL FALLBACK
 // ============================================================
@@ -66,119 +49,49 @@ interface EventType {
   id: string;
   label: string;
   color: string;
-  icon: React.ComponentType<{
-    className?: string;
-  }>;
+  icon: React.ComponentType<{ className?: string }>;
 }
 
 const EVENT_TYPES: EventType[] = [
-  {
-    id: "exam",
-    label: "Exams",
-    color: "#7c3aed",
-    icon: GraduationCap,
-  },
-  {
-    id: "ptm",
-    label: "PTM",
-    color: "#2563eb",
-    icon: CalendarClock,
-  },
-  {
-    id: "holiday",
-    label: "Holidays",
-    color: "#dc2626",
-    icon: CalendarOff,
-  },
-  {
-    id: "birthday",
-    label: "Birthdays",
-    color: "#db2777",
-    icon: PartyPopper,
-  },
-  {
-    id: "fee",
-    label: "Fee Dues",
-    color: "#d97706",
-    icon: Wallet,
-  },
-  {
-    id: "school_event",
-    label: "School Events",
-    color: "#059669",
-    icon: Calendar,
-  },
-  {
-    id: "announcement",
-    label: "Announcements",
-    color: "#0891b2",
-    icon: Megaphone,
-  },
+  { id: "exam", label: "Exams", color: "#7c3aed", icon: GraduationCap },
+  { id: "ptm", label: "PTM", color: "#2563eb", icon: CalendarClock },
+  { id: "holiday", label: "Holidays", color: "#dc2626", icon: CalendarOff },
+  { id: "birthday", label: "Birthdays", color: "#db2777", icon: PartyPopper },
+  { id: "fee", label: "Fee Dues", color: "#d97706", icon: Wallet },
+  { id: "school_event", label: "School Events", color: "#059669", icon: Calendar },
+  { id: "announcement", label: "Announcements", color: "#0891b2", icon: Megaphone },
 ];
 
 const VIEW_CFG = [
-  {
-    id: "dayGridMonth",
-    label: "Month",
-    icon: CalendarDays,
-  },
-  {
-    id: "timeGridWeek",
-    label: "Week",
-    icon: Calendar,
-  },
-  {
-    id: "listWeek",
-    label: "Agenda",
-    icon: List,
-  },
+  { id: "dayGridMonth", label: "Month", icon: CalendarDays },
+  { id: "timeGridWeek", label: "Week", icon: Calendar },
+  { id: "listWeek", label: "Agenda", icon: List },
 ] as const;
 
 type ViewId = (typeof VIEW_CFG)[number]["id"];
 
-// ============================================================
-// TYPES
-// ============================================================
-
 interface ClickedEvent {
   id: string;
   title: string;
-
   start: string;
   end?: string;
-
   allDay: boolean;
-
   type: string;
-
   description?: string;
-
   examType?: string;
-
   teacher?: string;
   student?: string;
   parent?: string;
-
   amount?: number;
-
   status?: string;
-
   editable?: boolean;
-
   entityId?: string;
-
   createdBy?: string;
-
   notes?: string;
-
   holidayType?: string;
-
   academicYear?: string;
-
   booked?: boolean;
-
   section?: string;
-
   color?: string;
 }
 
@@ -187,58 +100,61 @@ interface Props {
   canCreate: boolean;
 }
 
-// ============================================================
-// COMPONENT
-// ============================================================
-
 export function CalendarClient({ role, canCreate }: Props) {
   const calRef = useRef<any>(null);
-
   const mountedRef = useRef(false);
 
+  // Dynamic Calendar Modules State
+  const [calendarComponent, setCalendarComponent] = useState<any>(null);
+  const [plugins, setPlugins] = useState<any[]>([]);
+
+  // Load FullCalendar pure client-side to strictly avoid SSR/Turbopack Class errors
   useEffect(() => {
     mountedRef.current = true;
+
+    Promise.all([
+      import("@fullcalendar/react"),
+      import("@fullcalendar/daygrid"),
+      import("@fullcalendar/timegrid"),
+      import("@fullcalendar/list"),
+      import("@fullcalendar/interaction"),
+    ]).then(([fc, dayGrid, timeGrid, list, interaction]) => {
+      if (mountedRef.current) {
+        setCalendarComponent(() => fc.default);
+        setPlugins([
+          dayGrid.default,
+          timeGrid.default,
+          list.default,
+          interaction.default,
+        ]);
+      }
+    }).catch((err) => {
+      console.error("Failed to load FullCalendar modules:", err);
+    });
 
     return () => {
       mountedRef.current = false;
     };
   }, []);
 
-  // ============================================================
-  // STATES
-  // ============================================================
-
   const [view, setView] = useState<ViewId>("dayGridMonth");
-
   const [titleLabel, setTitleLabel] = useState("");
-
   const [loading, setLoading] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
-
   const [query, setQuery] = useState("");
-
   const [showFilters, setShowFilters] = useState(false);
-
   const [activeTypes, setActiveTypes] = useState(
-    new Set(EVENT_TYPES.map((t) => t.id)),
+    new Set(EVENT_TYPES.map((t) => t.id))
   );
-
   const [clickedEvent, setClickedEvent] = useState<ClickedEvent | null>(null);
-
   const [addModalDate, setAddModalDate] = useState<string | null>(null);
-
   const [addModalOpen, setAddModalOpen] = useState(false);
-
-  // ============================================================
-  // FETCH EVENTS
-  // ============================================================
 
   const fetchEvents = useCallback(
     async (
       fetchInfo: any,
       successCallback: (events: EventInput[]) => void,
-      failureCallback: (error: Error) => void,
+      failureCallback: (error: Error) => void
     ) => {
       try {
         if (mountedRef.current) {
@@ -247,12 +163,9 @@ export function CalendarClient({ role, canCreate }: Props) {
         }
 
         const types = Array.from(activeTypes).join(",");
-
         const response = await fetch(
           `/api/calendar/events?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&types=${types}`,
-          {
-            cache: "no-store",
-          },
+          { cache: "no-store" }
         );
 
         if (!response.ok) {
@@ -261,22 +174,13 @@ export function CalendarClient({ role, canCreate }: Props) {
 
         const data = await response.json();
 
-        if (!mountedRef.current) {
-          return;
-        }
-
+        if (!mountedRef.current) return;
         successCallback(Array.isArray(data) ? data : data.events || []);
       } catch (err) {
         console.error("Calendar fetch error:", err);
-
-        if (!mountedRef.current) {
-          return;
-        }
-
-        const error = err instanceof Error ? err : new Error("Unknown error");
-
-        failureCallback(error);
-
+        if (!mountedRef.current) return;
+        const errorObj = err instanceof Error ? err : new Error("Unknown error");
+        failureCallback(errorObj);
         setError("Failed to load calendar events");
       } finally {
         if (mountedRef.current) {
@@ -284,222 +188,122 @@ export function CalendarClient({ role, canCreate }: Props) {
         }
       }
     },
-    [activeTypes],
+    [activeTypes]
   );
-
-  // ============================================================
-  // REFRESH EVENTS
-  // ============================================================
 
   const refetch = useCallback(() => {
     calRef.current?.getApi().refetchEvents();
   }, []);
 
-  // ============================================================
-  // SEARCH FILTER
-  // ============================================================
-
   const filterEvent = useCallback(
     (event: any) => {
-      if (!query.trim()) {
-        return true;
-      }
-
+      if (!query.trim()) return true;
       const q = query.toLowerCase();
-
       return (
         event.title?.toLowerCase().includes(q) ||
         event.extendedProps?.description?.toLowerCase()?.includes(q)
       );
     },
-    [query],
+    [query]
   );
 
-  // ============================================================
-  // EVENT CLICK
-  // ============================================================
-
-  const handleEventClick = useCallback(
-    (info: any) => {
-      info.jsEvent.preventDefault();
-
-      const props = info.event.extendedProps;
-
-      setClickedEvent({
-        id: info.event.id,
-        title: info.event.title,
-        start: info.event.startStr,
-        end: info.event.endStr || undefined,
-        allDay: info.event.allDay,
-        color: info.event.backgroundColor || "#374151",
-        type: props?.type || "",
-        ...props,
-      });
-    },
-    [],
-  );
-
-  // ============================================================
-  // DATE CLICK
-  // ============================================================
+  const handleEventClick = useCallback((info: any) => {
+    info.jsEvent.preventDefault();
+    const props = info.event.extendedProps;
+    setClickedEvent({
+      id: info.event.id,
+      title: info.event.title,
+      start: info.event.startStr,
+      end: info.event.endStr || undefined,
+      allDay: info.event.allDay,
+      color: info.event.backgroundColor || "#374151",
+      type: props?.type || "",
+      ...props,
+    });
+  }, []);
 
   const handleDateClick = useCallback(
     (info: any) => {
-      if (!canCreate) {
-        return;
-      }
-
+      if (!canCreate) return;
       setAddModalDate(info.dateStr);
       setAddModalOpen(true);
     },
-    [canCreate],
+    [canCreate]
   );
 
-  // ============================================================
-  // EVENT DROP
-  // ============================================================
+  const handleEventDrop = useCallback(async (info: any) => {
+    if (!info.event.extendedProps?.editable) {
+      info.revert();
+      return;
+    }
+    try {
+      const response = await fetch(`/api/calendar/events/${info.event.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: info.event.startStr,
+          endDate: info.event.endStr || null,
+          allDay: info.event.allDay,
+        }),
+      });
+      if (!response.ok) info.revert();
+    } catch {
+      info.revert();
+    }
+  }, []);
 
-  const handleEventDrop = useCallback(
-    async (info: any) => {
-      if (!info.event.extendedProps?.editable) {
-        info.revert();
-        return;
-      }
+  const handleEventResize = useCallback(async (info: any) => {
+    if (!info.event.extendedProps?.editable) {
+      info.revert();
+      return;
+    }
+    try {
+      const response = await fetch(`/api/calendar/events/${info.event.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startDate: info.event.startStr,
+          endDate: info.event.endStr,
+          allDay: info.event.allDay,
+        }),
+      });
+      if (!response.ok) info.revert();
+    } catch {
+      info.revert();
+    }
+  }, []);
 
-      try {
-        const response = await fetch(`/api/calendar/events/${info.event.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            startDate: info.event.startStr,
-            endDate: info.event.endStr || null,
-            allDay: info.event.allDay,
-          }),
-        });
-
-        if (!response.ok) {
-          info.revert();
-        }
-      } catch {
-        info.revert();
-      }
-    },
-    [],
-  );
-
-  // ============================================================
-  // EVENT RESIZE
-  // ============================================================
-
-  const handleEventResize = useCallback(
-    async (info: any) => {
-      if (!info.event.extendedProps?.editable) {
-        info.revert();
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/calendar/events/${info.event.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            startDate: info.event.startStr,
-            endDate: info.event.endStr,
-            allDay: info.event.allDay,
-          }),
-        });
-
-        if (!response.ok) {
-          info.revert();
-        }
-      } catch {
-        info.revert();
-      }
-    },
-    [],
-  );
-
-  // ============================================================
-  // DATE RANGE CHANGE
-  // ============================================================
-
-  const handleDatesSet = useCallback(
-    (info: any) => {
-      if (!mountedRef.current) {
-        return;
-      }
-
-      setTitleLabel(info.view.title);
-    },
-    [],
-  );
-
-  // ============================================================
-  // NAVIGATION
-  // ============================================================
+  const handleDatesSet = useCallback((info: any) => {
+    if (!mountedRef.current) return;
+    setTitleLabel(info.view.title);
+  }, []);
 
   const nav = (direction: "prev" | "next" | "today") => {
     const api = calRef.current?.getApi();
-
-    if (!api) {
-      return;
-    }
-
-    if (direction === "prev") {
-      api.prev();
-    }
-
-    if (direction === "next") {
-      api.next();
-    }
-
-    if (direction === "today") {
-      api.today();
-    }
+    if (!api) return;
+    if (direction === "prev") api.prev();
+    if (direction === "next") api.next();
+    if (direction === "today") api.today();
   };
-
-  // ============================================================
-  // CHANGE VIEW
-  // ============================================================
 
   const changeView = (newView: ViewId) => {
     setView(newView);
     calRef.current?.getApi().changeView(newView);
   };
 
-  // ============================================================
-  // FILTER TYPES
-  // ============================================================
-
   const toggleType = (id: string) => {
     setActiveTypes((previous) => {
       const next = new Set(previous);
-
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const handleTypeToggle = (id: string) => {
     toggleType(id);
-
-    setTimeout(() => {
-      refetch();
-    }, 100);
+    setTimeout(() => refetch(), 100);
   };
-
-  // ============================================================
-  // ADD SUCCESS
-  // ============================================================
 
   const handleAddSuccess = () => {
     setAddModalOpen(false);
@@ -507,16 +311,9 @@ export function CalendarClient({ role, canCreate }: Props) {
     refetch();
   };
 
-  // ============================================================
-  // DELETE EVENT
-  // ============================================================
-
   const handleDelete = async (eventId: string) => {
     try {
-      await fetch(`/api/calendar/events/${eventId}`, {
-        method: "DELETE",
-      });
-
+      await fetch(`/api/calendar/events/${eventId}`, { method: "DELETE" });
       setClickedEvent(null);
       refetch();
     } catch {
@@ -524,97 +321,48 @@ export function CalendarClient({ role, canCreate }: Props) {
     }
   };
 
+  const FullCalendarComponent = calendarComponent;
+
   return (
     <div className="flex flex-col gap-4 pb-8">
       <style>
         {`
-        .fc {
-          font-family: inherit;
-        }
-
-        .fc .fc-toolbar {
-          display:none!important;
-        }
-
-        .fc .fc-view-harness {
-          background:white;
-        }
-
-        .fc .fc-daygrid-day:hover {
-          background:#f9fafb;
-        }
-
-        .fc .fc-daygrid-day.fc-day-today {
-          background:#eff6ff;
-        }
-
-        .fc .fc-daygrid-day-number {
-          font-size:13px;
-          font-weight:500;
-          padding:8px;
-        }
-
-        .fc .fc-event {
-          border-radius:6px;
-          border:none;
-          padding:2px 5px;
-          font-size:11px;
-          font-weight:600;
-          cursor:pointer;
-        }
-
-        .fc .fc-scrollgrid {
-          border:none;
-        }
-
-        .fc td,
-        .fc th {
-          border-color:#f3f4f6;
-        }
+        .fc { font-family: inherit; }
+        .fc .fc-toolbar { display:none!important; }
+        .fc .fc-view-harness { background:white; }
+        .fc .fc-daygrid-day:hover { background:#f9fafb; }
+        .fc .fc-daygrid-day.fc-day-today { background:#eff6ff; }
+        .fc .fc-daygrid-day-number { font-size:13px; font-weight:500; padding:8px; }
+        .fc .fc-event { border-radius:6px; border:none; padding:2px 5px; font-size:11px; font-weight:600; cursor:pointer; }
+        .fc .fc-scrollgrid { border:none; }
+        .fc td, .fc th { border-color:#f3f4f6; }
         `}
       </style>
 
       {/* HEADER */}
-
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => nav("prev")}
-              className="p-2 rounded-xl hover:bg-gray-100"
-            >
+            <button onClick={() => nav("prev")} className="p-2 rounded-xl hover:bg-gray-100">
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <button
-              onClick={() => nav("today")}
-              className="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-50 text-blue-700"
-            >
+            <button onClick={() => nav("today")} className="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-50 text-blue-700">
               Today
             </button>
 
-            <button
-              onClick={() => nav("next")}
-              className="p-2 rounded-xl hover:bg-gray-100"
-            >
+            <button onClick={() => nav("next")} className="p-2 rounded-xl hover:bg-gray-100">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <h2 className="font-bold text-gray-900 min-w-[180px]">
-            {titleLabel}
-          </h2>
+          <h2 className="font-bold text-gray-900 min-w-[180px]">{titleLabel}</h2>
 
-          {loading && (
-            <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-          )}
+          {loading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
 
           <div className="flex items-center gap-2 ml-auto flex-wrap">
-            {/* SEARCH */}
-
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -623,12 +371,7 @@ export function CalendarClient({ role, canCreate }: Props) {
               />
             </div>
 
-            {/* FILTER BUTTON */}
-
-            <button
-              onClick={() => setShowFilters((p) => !p)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold"
-            >
+            <button onClick={() => setShowFilters((p) => !p)} className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold">
               <Filter className="w-4 h-4" />
               Filters
             </button>
@@ -646,20 +389,17 @@ export function CalendarClient({ role, canCreate }: Props) {
               </button>
             )}
 
-            {/* VIEW SWITCH */}
-
             <div className="flex bg-gray-100 rounded-xl p-1">
               {VIEW_CFG.map((item) => {
                 const Icon = item.icon;
                 const active = view === item.id;
-
                 return (
                   <button
                     key={item.id}
                     onClick={() => changeView(item.id)}
                     className={cn(
                       "px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1",
-                      active ? "bg-white shadow-sm" : "text-gray-500",
+                      active ? "bg-white shadow-sm" : "text-gray-500"
                     )}
                   >
                     <Icon className="w-3 h-3" />
@@ -671,47 +411,27 @@ export function CalendarClient({ role, canCreate }: Props) {
           </div>
         </div>
 
-        {/* FILTER PANEL */}
-
         <AnimatePresence>
           {showFilters && (
             <motion.div
-              initial={{
-                height: 0,
-                opacity: 0,
-              }}
-              animate={{
-                height: "auto",
-                opacity: 1,
-              }}
-              exit={{
-                height: 0,
-                opacity: 0,
-              }}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
               <div className="pt-4 mt-4 border-t flex flex-wrap gap-2">
                 {EVENT_TYPES.map((type) => {
                   const Icon = type.icon;
                   const active = activeTypes.has(type.id);
-
                   return (
                     <button
                       key={type.id}
                       onClick={() => handleTypeToggle(type.id)}
                       className={cn(
                         "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold border",
-                        active
-                          ? "text-white border-transparent"
-                          : "text-gray-500",
+                        active ? "text-white border-transparent" : "text-gray-500"
                       )}
-                      style={
-                        active
-                          ? {
-                            backgroundColor: type.color,
-                          }
-                          : {}
-                      }
+                      style={active ? { backgroundColor: type.color } : {}}
                     >
                       {active && <Check className="w-3 h-3" />}
                       <Icon className="w-3 h-3" />
@@ -725,8 +445,6 @@ export function CalendarClient({ role, canCreate }: Props) {
         </AnimatePresence>
       </div>
 
-      {/* ERROR */}
-
       {error && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
           <AlertTriangle className="text-red-500" />
@@ -738,69 +456,64 @@ export function CalendarClient({ role, canCreate }: Props) {
       )}
 
       {/* CALENDAR */}
-
-      <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
-        <FullCalendar
-          ref={calRef}
-          plugins={[
-            dayGridPlugin as any,
-            timeGridPlugin as any,
-            listPlugin as any,
-            interactionPlugin as any,
-          ]}
-          initialView="dayGridMonth"
-          headerToolbar={false}
-          events={(...args: any[]) => {
-            try {
-              const res = (fetchEvents as any)(...args);
-              if (res && typeof res.catch === "function") {
-                res.catch((err: any) => {
-                  const failure = args[2];
-                  if (typeof failure === "function") failure(err);
-                });
+      <div className="bg-white rounded-2xl border shadow-sm overflow-hidden min-h-[480px]">
+        {FullCalendarComponent && plugins.length > 0 ? (
+          <FullCalendarComponent
+            ref={calRef}
+            plugins={plugins}
+            initialView="dayGridMonth"
+            headerToolbar={false}
+            events={(...args: any[]) => {
+              try {
+                const res = (fetchEvents as any)(...args);
+                if (res && typeof res.catch === "function") {
+                  res.catch((err: any) => {
+                    const failure = args[2];
+                    if (typeof failure === "function") failure(err);
+                  });
+                }
+              } catch (err) {
+                const failure = args[2];
+                if (typeof failure === "function") failure(err as Error);
               }
-            } catch (err) {
-              const failure = args[2];
-              if (typeof failure === "function") failure(err as Error);
-            }
-          }}
-          eventClick={handleEventClick}
-          dateClick={canCreate ? handleDateClick : undefined}
-          eventDrop={handleEventDrop}
-          eventResize={handleEventResize}
-          datesSet={handleDatesSet}
-          editable={canCreate}
-          selectable={canCreate}
-          dayMaxEvents={4}
-          height="auto"
-          contentHeight={680}
-          firstDay={1}
-          eventDidMount={(info) => {
-            if (!query) return;
-
-            const hit = filterEvent(info.event);
-
-            if (!hit) {
-              info.el.style.opacity = "0.25";
-            }
-          }}
-          loading={(isLoading) => {
-            if (mountedRef.current) {
-              setLoading(isLoading);
-            }
-          }}
-        />
+            }}
+            eventClick={handleEventClick}
+            dateClick={canCreate ? handleDateClick : undefined}
+            eventDrop={handleEventDrop}
+            eventResize={handleEventResize}
+            datesSet={handleDatesSet}
+            editable={canCreate}
+            selectable={canCreate}
+            dayMaxEvents={4}
+            height="auto"
+            contentHeight={680}
+            firstDay={1}
+            eventDidMount={(info: any) => {
+              if (!query) return;
+              const hit = filterEvent(info.event);
+              if (!hit) {
+                info.el.style.opacity = "0.25";
+              }
+            }}
+            loading={(isLoading: boolean) => {
+              if (mountedRef.current) {
+                setLoading(isLoading);
+              }
+            }}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center min-h-[480px]">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
+            <p className="text-sm text-gray-500 font-medium">Loading Calendar...</p>
+          </div>
+        )}
       </div>
-
-      {/* EVENT MODAL */}
 
       <EventModal
         event={clickedEvent}
         onClose={() => setClickedEvent(null)}
         onDelete={canCreate ? handleDelete : undefined}
       />
-
-      {/* ADD EVENT */}
 
       <AddEventModal
         open={addModalOpen}
