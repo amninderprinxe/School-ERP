@@ -1,23 +1,6 @@
-import { Analytics } from "@vercel/analytics/next";
-import type { Metadata } from "next";
-import "./globals.css";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "CampusX - School ERP",
-  description: "Automated multi-tenant SaaS School ERP platform",
-};
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body>
-        {children}
-        <Analytics />
-      </body>
-    </html>
-  );
+export default function Home() {
+  // Je user login hai taan dashboard te bhej do, nahi taan login page te
+  redirect("/login"); 
 }
