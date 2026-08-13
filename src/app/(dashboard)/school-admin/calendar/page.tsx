@@ -1,12 +1,13 @@
-"use client";
+
 
 import { requireRole } from "@/lib/session";
 import dynamic         from "next/dynamic";
 import { CalendarDays, Loader2 } from "lucide-react";
 import { CalendarWrapper } from "@/components/calendar/calendar-wrapper";
 import { CalendarClient } from "@/components/calendar/calendar-client";
-export const metadata = { title: "Calendar — Campus-X" };
 
+
+export const metadata = { title: "Calendar — Campus-X" };
 
 export default async function CalendarPage() {
   const user = await requireRole(["SCHOOL_ADMIN"]);
