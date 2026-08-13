@@ -1,24 +1,14 @@
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next"
-import type { Metadata } from "next";
-import "./globals.css";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "CampusX - School ERP",
-  description: "Automated multi-tenant SaaS School ERP platform",
-};
+export default async function HomePage() {
+  const session = await auth();
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body>
-        {children}
-        <Analytics />
-      </body>
-    </html>
-  );
+  // 1. Agar user logged in nahi hai, ta login te bhejo
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  // 2. Agar user logged in hai, ta dashboard te bhejo
+  redirect("/dashboard");
 }
