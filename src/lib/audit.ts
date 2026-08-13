@@ -1,5 +1,4 @@
 import { Prisma } from "@prisma/client";
-
 import { prisma } from "@/lib/db";
 
 // ─────────────────────────────────────────────────────────────────
@@ -157,9 +156,7 @@ export const ACTION_LABELS: Record<string, string> = {
 // ACTION BADGE STYLE
 // ─────────────────────────────────────────────────────────────────
 
-export function actionBadge(
-  action: string,
-): string {
+export function actionBadge(action: string): string {
   if (
     action.startsWith("CREATE_") ||
     action.startsWith("IMPORT_")
@@ -221,9 +218,7 @@ export function actionBadge(
 // ROLE BADGE STYLE
 // ─────────────────────────────────────────────────────────────────
 
-export function roleBadgeStyle(
-  role: string,
-): string {
+export function roleBadgeStyle(role: string): string {
   switch (role) {
     case "SUPER_ADMIN":
       return "bg-red-50 text-red-700";
@@ -264,9 +259,7 @@ export interface LogActionParams {
   metadata?: Record<string, unknown>;
 }
 
-export function logAction(
-  params: LogActionParams,
-): void {
+export function logAction(params: LogActionParams): void {
   prisma.auditLog
     .create({
       data: {
@@ -283,9 +276,7 @@ export function logAction(
         entityId: params.entityId ?? null,
         entityName: params.entityName ?? null,
 
-        metadata: params.metadata
-          ? (params.metadata as unknown as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
+        metadata: (params.metadata as Prisma.InputJsonValue) ?? undefined,
       },
     })
     .catch((error) => {
