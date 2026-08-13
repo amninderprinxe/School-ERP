@@ -1,15 +1,46 @@
-import NextAuth from "next-auth";
+import NextAuth, { type DefaultSession } from "next-auth";
+import { JWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 
+// 1. Module Augmentation for TypeScript Safety
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      role: Role;
+      schoolId: string | null;
+      loginId: string | null;
+    } & DefaultSession["user"];
+  }
+
+  interface User {
+    id: string;
+    role: Role;
+    schoolId: string | null;
+    loginId: string | null;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    role: Role;
+    schoolId: string | null;
+    loginId: string | null;
+  }
+}
+
+// 2. Main Auth Config
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true, // <-- Eh line lazmi add karo Vercel deployment layi!
+  trustHost: true, // Vercel deployment laye mandatory hai
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60,
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
 
   providers: [
@@ -27,11 +58,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       async authorize(credentials) {
         const identifier = String(
-          credentials?.identifier ?? "",
+          credentials?.identifier ?? ""
         ).trim();
 
         const password = String(
-          credentials?.password ?? "",
+          credentials?.password ?? ""
         );
 
         if (!identifier || !password) {
@@ -45,12 +76,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: {
             isActive: true,
             OR: [
-              {
-                email: normalizedEmail,
-              },
-              {
-                loginId: normalizedLoginId,
-              },
+              { email: normalizedEmail },
+              { loginId: normalizedLoginId },
             ],
           },
           select: {
@@ -65,15 +92,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
 
-        console.log("Database fetch result:", user);  //temp
-
-        if (!user) {
+        if (!user || !user.password) {
           return null;
         }
 
         const passwordMatches = await bcrypt.compare(
           password,
-          user.password,
+          user.password
         );
 
         if (!passwordMatches) {
@@ -95,27 +120,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id as string;
-        token.role = user.role as Role;
-        token.schoolId =
-          (user.schoolId as string | null) ?? null;
-
-        token.loginId =
-          (user.loginId as string | null) ?? null;
+        token.id = user.id;
+        token.role = user.role;
+        token.schoolId = user.schoolId ?? null;
+        token.loginId = user.loginId ?? null;
       }
 
       return token;
     },
 
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as Role;
-        session.user.schoolId =
-          token.schoolId as string | null;
-
-        session.user.loginId =
-          token.loginId as string | null;
+      if (session.user && token) {
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.schoolId = token.schoolId ?? null;
+        session.user.loginId = token.loginId ?? null;
       }
 
       return session;
