@@ -1,19 +1,23 @@
-import { auth } from "@/lib/auth";
-import { getDashboardPath } from "@/lib/utils";
-import { redirect } from "next/navigation";
+import { Analytics } from "@vercel/analytics/next";
+import type { Metadata } from "next";
+import "./globals.css";
 
-/**
- * Root page: redirect authenticated users to their role dashboard,
- * unauthenticated users to login.
- * The middleware handles this for most routes, but this covers
- * a direct visit to "/".
- */
-export default async function HomePage() {
-  const session = await auth();
+export const metadata: Metadata = {
+  title: "CampusX - School ERP",
+  description: "Automated multi-tenant SaaS School ERP platform",
+};
 
-  if (!session?.user) {
-    redirect("/login");
-  }
-
-  redirect(getDashboardPath(session.user.role));
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <Analytics />
+      </body>
+    </html>
+  );
 }
