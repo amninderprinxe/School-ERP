@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
@@ -26,7 +28,6 @@ export default async function DashboardLayout({
 
     if (!dbUser) redirect("/login");
 
-    // Fetch current academic year + unread notification count safely
     const [currentAcademicYear, unreadNotificationCount] = await Promise.all([
       dbUser.schoolId
         ? prisma.academicYear.findFirst({
@@ -53,7 +54,6 @@ export default async function DashboardLayout({
     );
   } catch (error) {
     console.error("CRITICAL DASHBOARD LAYOUT ERROR:", error);
-    // Je database ya query vich error aave, taan app crash hon ki bajaye login te bhej devegi
     redirect("/login");
   }
 }
