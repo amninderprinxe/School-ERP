@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, useCallback, useEffect } from "react";
-import type { EventInput } from "@fullcalendar/core";
 import { motion, AnimatePresence } from "framer-motion";
 
 import {
@@ -11,7 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
-  Calendar,
+  Calendar as CalendarIcon,
   List,
   CalendarOff,
   GraduationCap,
@@ -30,19 +29,7 @@ import { AddEventModal } from "./add-event-modal";
 import type { Role } from "@prisma/client";
 
 // ============================================================
-// EVENT MODAL FALLBACK
-// ============================================================
-
-interface EventModalProps {
-  event: ClickedEvent | null;
-  onClose: () => void;
-  onDelete?: (id: string) => void;
-}
-
-const EventModal: React.FC<EventModalProps> = () => null;
-
-// ============================================================
-// CONFIG
+// CONFIG & TYPES
 // ============================================================
 
 interface EventType {
@@ -58,13 +45,12 @@ const EVENT_TYPES: EventType[] = [
   { id: "holiday", label: "Holidays", color: "#dc2626", icon: CalendarOff },
   { id: "birthday", label: "Birthdays", color: "#db2777", icon: PartyPopper },
   { id: "fee", label: "Fee Dues", color: "#d97706", icon: Wallet },
-  { id: "school_event", label: "School Events", color: "#059669", icon: Calendar },
+  { id: "school_event", label: "School Events", color: "#059669", icon: CalendarIcon },
   { id: "announcement", label: "Announcements", color: "#0891b2", icon: Megaphone },
 ];
 
 const VIEW_CFG = [
   { id: "dayGridMonth", label: "Month", icon: CalendarDays },
-  { id: "timeGridWeek", label: "Week", icon: Calendar },
   { id: "listWeek", label: "Agenda", icon: List },
 ] as const;
 
@@ -78,21 +64,8 @@ interface ClickedEvent {
   allDay: boolean;
   type: string;
   description?: string;
-  examType?: string;
-  teacher?: string;
-  student?: string;
-  parent?: string;
-  amount?: number;
-  status?: string;
-  editable?: boolean;
-  entityId?: string;
-  createdBy?: string;
-  notes?: string;
-  holidayType?: string;
-  academicYear?: string;
-  booked?: boolean;
-  section?: string;
   color?: string;
+  extendedProps?: any;
 }
 
 interface Props {
@@ -101,262 +74,117 @@ interface Props {
 }
 
 export function CalendarClient({ role, canCreate }: Props) {
-  const calRef = useRef<any>(null);
   const mountedRef = useRef(false);
 
-  // Dynamic Calendar Modules State
-  const [calendarComponent, setCalendarComponent] = useState<any>(null);
-  const [plugins, setPlugins] = useState<any[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState<ViewId>("dayGridMonth");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [activeTypes, setActiveTypes] = useState(new Set(EVENT_TYPES.map((t) => t.id)));
+  
+  const [events, setEvents] = useState<any[]>([]);
+  const [clickedEvent, setClickedEvent] = useState<ClickedEvent | null>(null);
+  const [addModalDate, setAddModalDate] = useState<string | null>(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
-  // Load FullCalendar pure client-side to strictly avoid SSR/Turbopack Class errors
   useEffect(() => {
     mountedRef.current = true;
-
-    Promise.all([
-      import("@fullcalendar/react"),
-      import("@fullcalendar/daygrid"),
-      import("@fullcalendar/timegrid"),
-      import("@fullcalendar/list"),
-      import("@fullcalendar/interaction"),
-    ]).then(([fc, dayGrid, timeGrid, list, interaction]) => {
-      if (mountedRef.current) {
-        setCalendarComponent(() => fc.default);
-        setPlugins([
-          dayGrid.default,
-          timeGrid.default,
-          list.default,
-          interaction.default,
-        ]);
-      }
-    }).catch((err) => {
-      console.error("Failed to load FullCalendar modules:", err);
-    });
-
     return () => {
       mountedRef.current = false;
     };
   }, []);
 
-  const [view, setView] = useState<ViewId>("dayGridMonth");
-  const [titleLabel, setTitleLabel] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [activeTypes, setActiveTypes] = useState(
-    new Set(EVENT_TYPES.map((t) => t.id))
-  );
-  const [clickedEvent, setClickedEvent] = useState<ClickedEvent | null>(null);
-  const [addModalDate, setAddModalDate] = useState<string | null>(null);
-  const [addModalOpen, setAddModalOpen] = useState(false);
+  // Calculate Date Ranges for Month
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
 
-  const fetchEvents = useCallback(
-    async (
-      fetchInfo: any,
-      successCallback: (events: EventInput[]) => void,
-      failureCallback: (error: Error) => void
-    ) => {
-      try {
-        if (mountedRef.current) {
-          setLoading(true);
-          setError(null);
-        }
+  const firstDayOfMonth = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
 
-        const types = Array.from(activeTypes).join(",");
-        const response = await fetch(
-          `/api/calendar/events?start=${fetchInfo.startStr}&end=${fetchInfo.endStr}&types=${types}`,
-          { cache: "no-store" }
-        );
+  // Range for API Fetching
+  const startDateStr = new Date(year, month, 1 - firstDayOfMonth.getDay()).toISOString();
+  const endDateStr = new Date(year, month + 1, 6 - lastDayOfMonth.getDay()).toISOString();
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch calendar events");
-        }
-
-        const data = await response.json();
-
-        if (!mountedRef.current) return;
-        successCallback(Array.isArray(data) ? data : data.events || []);
-      } catch (err) {
-        console.error("Calendar fetch error:", err);
-        if (!mountedRef.current) return;
-        const errorObj = err instanceof Error ? err : new Error("Unknown error");
-        failureCallback(errorObj);
-        setError("Failed to load calendar events");
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
+  // Fetch Events API
+  const loadEvents = useCallback(async () => {
+    try {
+      if (mountedRef.current) {
+        setLoading(true);
+        setError(null);
       }
-    },
-    [activeTypes]
-  );
 
-  const refetch = useCallback(() => {
-    calRef.current?.getApi().refetchEvents();
-  }, []);
-
-  const filterEvent = useCallback(
-    (event: any) => {
-      if (!query.trim()) return true;
-      const q = query.toLowerCase();
-      return (
-        event.title?.toLowerCase().includes(q) ||
-        event.extendedProps?.description?.toLowerCase()?.includes(q)
+      const types = Array.from(activeTypes).join(",");
+      const response = await fetch(
+        `/api/calendar/events?start=${startDateStr}&end=${endDateStr}&types=${types}`,
+        { cache: "no-store" }
       );
-    },
-    [query]
-  );
 
-  const handleEventClick = useCallback((info: any) => {
-    info.jsEvent.preventDefault();
-    const props = info.event.extendedProps;
-    setClickedEvent({
-      id: info.event.id,
-      title: info.event.title,
-      start: info.event.startStr,
-      end: info.event.endStr || undefined,
-      allDay: info.event.allDay,
-      color: info.event.backgroundColor || "#374151",
-      type: props?.type || "",
-      ...props,
-    });
-  }, []);
+      if (!response.ok) throw new Error("Failed to fetch events");
 
-  const handleDateClick = useCallback(
-    (info: any) => {
-      if (!canCreate) return;
-      setAddModalDate(info.dateStr);
-      setAddModalOpen(true);
-    },
-    [canCreate]
-  );
-
-  const handleEventDrop = useCallback(async (info: any) => {
-    if (!info.event.extendedProps?.editable) {
-      info.revert();
-      return;
+      const data = await response.json();
+      if (mountedRef.current) {
+        setEvents(Array.isArray(data) ? data : data.events || []);
+      }
+    } catch (err) {
+      console.error("Fetch error:", err);
+      if (mountedRef.current) setError("Failed to load events");
+    } finally {
+      if (mountedRef.current) setLoading(false);
     }
-    try {
-      const response = await fetch(`/api/calendar/events/${info.event.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startDate: info.event.startStr,
-          endDate: info.event.endStr || null,
-          allDay: info.event.allDay,
-        }),
-      });
-      if (!response.ok) info.revert();
-    } catch {
-      info.revert();
-    }
-  }, []);
+  }, [startDateStr, endDateStr, activeTypes]);
 
-  const handleEventResize = useCallback(async (info: any) => {
-    if (!info.event.extendedProps?.editable) {
-      info.revert();
-      return;
-    }
-    try {
-      const response = await fetch(`/api/calendar/events/${info.event.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startDate: info.event.startStr,
-          endDate: info.event.endStr,
-          allDay: info.event.allDay,
-        }),
-      });
-      if (!response.ok) info.revert();
-    } catch {
-      info.revert();
-    }
-  }, []);
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
-  const handleDatesSet = useCallback((info: any) => {
-    if (!mountedRef.current) return;
-    setTitleLabel(info.view.title);
-  }, []);
-
+  // Navigation handlers
   const nav = (direction: "prev" | "next" | "today") => {
-    const api = calRef.current?.getApi();
-    if (!api) return;
-    if (direction === "prev") api.prev();
-    if (direction === "next") api.next();
-    if (direction === "today") api.today();
+    if (direction === "today") setCurrentDate(new Date());
+    else if (direction === "prev") setCurrentDate(new Date(year, month - 1, 1));
+    else if (direction === "next") setCurrentDate(new Date(year, month + 1, 1));
   };
 
-  const changeView = (newView: ViewId) => {
-    setView(newView);
-    calRef.current?.getApi().changeView(newView);
-  };
-
-  const toggleType = (id: string) => {
-    setActiveTypes((previous) => {
-      const next = new Set(previous);
+  const handleTypeToggle = (id: string) => {
+    setActiveTypes((prev) => {
+      const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
   };
 
-  const handleTypeToggle = (id: string) => {
-    toggleType(id);
-    setTimeout(() => refetch(), 100);
-  };
+  // Generate Calendar Days Grid
+  const daysInMonth: Date[] = [];
+  const startGridDate = new Date(year, month, 1 - (firstDayOfMonth.getDay() === 0 ? 6 : firstDayOfMonth.getDay() - 1));
+  
+  for (let i = 0; i < 35; i++) {
+    const day = new Date(startGridDate);
+    day.setDate(startGridDate.getDate() + i);
+    daysInMonth.push(day);
+  }
 
-  const handleAddSuccess = () => {
-    setAddModalOpen(false);
-    setAddModalDate(null);
-    refetch();
-  };
-
-  const handleDelete = async (eventId: string) => {
-    try {
-      await fetch(`/api/calendar/events/${eventId}`, { method: "DELETE" });
-      setClickedEvent(null);
-      refetch();
-    } catch {
-      console.error("Delete failed");
-    }
-  };
-
-  const FullCalendarComponent = calendarComponent;
+  const monthLabel = currentDate.toLocaleString("default", { month: "long", year: "numeric" });
 
   return (
     <div className="flex flex-col gap-4 pb-8">
-      <style>
-        {`
-        .fc { font-family: inherit; }
-        .fc .fc-toolbar { display:none!important; }
-        .fc .fc-view-harness { background:white; }
-        .fc .fc-daygrid-day:hover { background:#f9fafb; }
-        .fc .fc-daygrid-day.fc-day-today { background:#eff6ff; }
-        .fc .fc-daygrid-day-number { font-size:13px; font-weight:500; padding:8px; }
-        .fc .fc-event { border-radius:6px; border:none; padding:2px 5px; font-size:11px; font-weight:600; cursor:pointer; }
-        .fc .fc-scrollgrid { border:none; }
-        .fc td, .fc th { border-color:#f3f4f6; }
-        `}
-      </style>
-
-      {/* HEADER */}
+      {/* HEADER BAR */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
             <button onClick={() => nav("prev")} className="p-2 rounded-xl hover:bg-gray-100">
               <ChevronLeft className="w-4 h-4" />
             </button>
-
             <button onClick={() => nav("today")} className="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-50 text-blue-700">
               Today
             </button>
-
             <button onClick={() => nav("next")} className="p-2 rounded-xl hover:bg-gray-100">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <h2 className="font-bold text-gray-900 min-w-[180px]">{titleLabel}</h2>
+          <h2 className="font-bold text-gray-900 min-w-[180px] text-lg">{monthLabel}</h2>
 
           {loading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
 
@@ -379,10 +207,10 @@ export function CalendarClient({ role, canCreate }: Props) {
             {canCreate && (
               <button
                 onClick={() => {
-                  setAddModalDate(null);
+                  setAddModalDate(new Date().toISOString().split("T")[0]);
                   setAddModalOpen(true);
                 }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
               >
                 <Plus className="w-4 h-4" />
                 Add Event
@@ -396,10 +224,10 @@ export function CalendarClient({ role, canCreate }: Props) {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => changeView(item.id)}
+                    onClick={() => setView(item.id)}
                     className={cn(
-                      "px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1",
-                      active ? "bg-white shadow-sm" : "text-gray-500"
+                      "px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1 transition",
+                      active ? "bg-white shadow-sm text-gray-900" : "text-gray-500"
                     )}
                   >
                     <Icon className="w-3 h-3" />
@@ -411,14 +239,10 @@ export function CalendarClient({ role, canCreate }: Props) {
           </div>
         </div>
 
+        {/* FILTERS PANEL */}
         <AnimatePresence>
           {showFilters && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
               <div className="pt-4 mt-4 border-t flex flex-wrap gap-2">
                 {EVENT_TYPES.map((type) => {
                   const Icon = type.icon;
@@ -428,7 +252,7 @@ export function CalendarClient({ role, canCreate }: Props) {
                       key={type.id}
                       onClick={() => handleTypeToggle(type.id)}
                       className={cn(
-                        "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold border",
+                        "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold border transition",
                         active ? "text-white border-transparent" : "text-gray-500"
                       )}
                       style={active ? { backgroundColor: type.color } : {}}
@@ -446,75 +270,104 @@ export function CalendarClient({ role, canCreate }: Props) {
       </div>
 
       {error && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-          <AlertTriangle className="text-red-500" />
-          <span className="text-sm text-red-600">{error}</span>
-          <button onClick={refetch} className="ml-auto text-red-600">
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-600">
+          <AlertTriangle className="w-5 h-5" />
+          <span className="text-sm font-medium">{error}</span>
+          <button onClick={loadEvents} className="ml-auto">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* CALENDAR */}
-      <div className="bg-white rounded-2xl border shadow-sm overflow-hidden min-h-[480px]">
-        {FullCalendarComponent && plugins.length > 0 ? (
-          <FullCalendarComponent
-            ref={calRef}
-            plugins={plugins}
-            initialView="dayGridMonth"
-            headerToolbar={false}
-            events={(...args: any[]) => {
-              try {
-                const res = (fetchEvents as any)(...args);
-                if (res && typeof res.catch === "function") {
-                  res.catch((err: any) => {
-                    const failure = args[2];
-                    if (typeof failure === "function") failure(err);
-                  });
-                }
-              } catch (err) {
-                const failure = args[2];
-                if (typeof failure === "function") failure(err as Error);
-              }
-            }}
-            eventClick={handleEventClick}
-            dateClick={canCreate ? handleDateClick : undefined}
-            eventDrop={handleEventDrop}
-            eventResize={handleEventResize}
-            datesSet={handleDatesSet}
-            editable={canCreate}
-            selectable={canCreate}
-            dayMaxEvents={4}
-            height="auto"
-            contentHeight={680}
-            firstDay={1}
-            eventDidMount={(info: any) => {
-              if (!query) return;
-              const hit = filterEvent(info.event);
-              if (!hit) {
-                info.el.style.opacity = "0.25";
-              }
-            }}
-            loading={(isLoading: boolean) => {
-              if (mountedRef.current) {
-                setLoading(isLoading);
-              }
-            }}
-          />
+      {/* CALENDAR BODY */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 min-h-[520px]">
+        {view === "dayGridMonth" ? (
+          <div>
+            {/* Days Header */}
+            <div className="grid grid-cols-7 text-center font-bold text-xs text-gray-400 border-b pb-2 mb-2">
+              <div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div>
+            </div>
+
+            {/* Month Grid */}
+            <div className="grid grid-cols-7 gap-1 auto-rows-fr">
+              {daysInMonth.map((day, idx) => {
+                const dateStr = day.toISOString().split("T")[0];
+                const isCurrentMonth = day.getMonth() === month;
+                const isToday = day.toDateString() === new Date().toDateString();
+
+                // Filter events for this day
+                const dayEvents = events.filter((e) => {
+                  if (!e.start) return false;
+                  const eDate = e.start.split("T")[0];
+                  const matchesSearch = !query || e.title?.toLowerCase().includes(query.toLowerCase());
+                  return eDate === dateStr && matchesSearch;
+                });
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      if (canCreate) {
+                        setAddModalDate(dateStr);
+                        setAddModalOpen(true);
+                      }
+                    }}
+                    className={cn(
+                      "min-h-[100px] border border-gray-100 rounded-xl p-2 flex flex-col justify-between transition cursor-pointer hover:bg-gray-50",
+                      !isCurrentMonth && "opacity-30 bg-gray-50/50",
+                      isToday && "bg-blue-50/40 border-blue-200"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={cn("text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center", isToday ? "bg-blue-600 text-white" : "text-gray-700")}>
+                        {day.getDate()}
+                      </span>
+                    </div>
+
+                    {/* Events List for Day */}
+                    <div className="flex flex-col gap-1 mt-1 overflow-y-auto max-h-[80px]">
+                      {dayEvents.map((ev) => (
+                        <div
+                          key={ev.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setClickedEvent(ev);
+                          }}
+                          className="px-2 py-1 rounded text-[11px] font-semibold text-white truncate shadow-sm hover:opacity-90 transition"
+                          style={{ backgroundColor: ev.color || "#2563eb" }}
+                        >
+                          {ev.title}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : (
-          <div className="flex flex-col items-center justify-center min-h-[480px]">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
-            <p className="text-sm text-gray-500 font-medium">Loading Calendar...</p>
+          /* Agenda / List View */
+          <div className="divide-y divide-gray-100">
+            {events.length === 0 ? (
+              <div className="text-center py-12 text-gray-400 text-sm">No events found</div>
+            ) : (
+              events.map((ev) => (
+                <div key={ev.id} className="py-3 flex items-center justify-between hover:bg-gray-50 px-2 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: ev.color || "#2563eb" }} />
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900">{ev.title}</h4>
+                      <p className="text-xs text-gray-400">{ev.start?.split("T")[0]}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
 
-      <EventModal
-        event={clickedEvent}
-        onClose={() => setClickedEvent(null)}
-        onDelete={canCreate ? handleDelete : undefined}
-      />
-
+      {/* ADD EVENT MODAL */}
       <AddEventModal
         open={addModalOpen}
         defaultDate={addModalDate}
@@ -522,7 +375,11 @@ export function CalendarClient({ role, canCreate }: Props) {
           setAddModalOpen(false);
           setAddModalDate(null);
         }}
-        onSuccess={handleAddSuccess}
+        onSuccess={() => {
+          setAddModalOpen(false);
+          setAddModalDate(null);
+          loadEvents();
+        }}
       />
     </div>
   );
