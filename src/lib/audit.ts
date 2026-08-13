@@ -260,26 +260,22 @@ export interface LogActionParams {
 }
 
 export function logAction(params: LogActionParams): void {
+  const auditData: Prisma.AuditLogUncheckedCreateInput = {
+    userId: params.userId,
+    userRole: params.userRole,
+    userName: params.userName,
+    schoolId: params.schoolId ?? null,
+    schoolName: params.schoolName ?? null,
+    action: params.action,
+    entity: params.entity,
+    entityId: params.entityId ?? null,
+    entityName: params.entityName ?? null,
+    metadata: params.metadata ? (params.metadata as Prisma.InputJsonValue) : undefined,
+  };
+
   prisma.auditLog
     .create({
-      data: {
-        userId: params.userId,
-        userRole: params.userRole,
-        userName: params.userName,
-
-        schoolId: params.schoolId ?? null,
-        schoolName: params.schoolName ?? null,
-
-        action: params.action,
-
-        entity: params.entity,
-        entityId: params.entityId ?? null,
-        entityName: params.entityName ?? null,
-
-        ...(params.metadata
-          ? { metadata: params.metadata as Prisma.InputJsonValue }
-          : {}),
-      },
+      data: auditData,
     })
     .catch((error) => {
       console.error(
@@ -288,7 +284,6 @@ export function logAction(params: LogActionParams): void {
       );
     });
 }
-
 // ─────────────────────────────────────────────────────────────────
 // DATE FILTER HELPERS
 // ─────────────────────────────────────────────────────────────────
