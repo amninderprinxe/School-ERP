@@ -6,6 +6,7 @@ import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true, // <-- Eh line lazmi add karo Vercel deployment layi!
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60,
