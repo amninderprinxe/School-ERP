@@ -1,3 +1,5 @@
+"use client";
+
 import { requireRole } from "@/lib/session";
 import dynamic         from "next/dynamic";
 import { CalendarDays, Loader2 } from "lucide-react";
