@@ -126,7 +126,7 @@ async function sendWelcomeEmailSafe(
 }
 
 // ─────────────────────────────────────────────────────────────────
-// IMPORT STUDENTS
+// IMPORT STUDENTS (EMAIL OPTIONAL)
 // ─────────────────────────────────────────────────────────────────
 
 export async function importStudents(
@@ -210,7 +210,8 @@ export async function importStudents(
 
       try {
         const name = row.name?.trim();
-        const rawEmail = row.email?.trim() ? row.email.trim().toLowerCase() : null;
+        // Email optional: normalized to null if blank
+        const rawEmail = row.email && row.email.trim() !== "" ? row.email.trim().toLowerCase() : null;
         const className = row.className?.trim();
         const sectionName = row.sectionName?.trim();
         const rollNumber = row.rollNumber ? String(row.rollNumber).trim() : "";
@@ -262,7 +263,7 @@ export async function importStudents(
           continue;
         }
 
-        // Check duplicate email if provided
+        // Check duplicate email ONLY if email was explicitly provided
         if (rawEmail) {
           const existingEmail = await prisma.user.findUnique({
             where: { email: rawEmail },
