@@ -418,7 +418,7 @@ export function ChangePasswordForm({
       <div className="mt-7 border-t border-gray-100 pt-5">
         <SubmitButton>
           
-          label="Change Password"
+          Change Password
           
         </SubmitButton>
       </div>

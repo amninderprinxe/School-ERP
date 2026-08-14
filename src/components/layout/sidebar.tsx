@@ -130,7 +130,7 @@ const SCHOOL_ADMIN_NAV: NavGroupDef[] = [
       { label: "Academic Years", href: "/school-admin/academic-years", icon: CalendarDays },
       { label: "Import", href: "/school-admin/import", icon: Upload },
       { label: "Audit Log", href: "/school-admin/audit-logs", icon: ShieldCheck },
-      { label: "School Settings", href: "/school-admin/settings", icon: Settings },
+      // { label: "School Settings", href: "/school-admin/settings", icon: Settings },
     ],
   },
 ];
