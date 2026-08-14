@@ -54,7 +54,7 @@ export async function getStudentsForPromotion(
     const result: StudentForPromotion[] = students.map((sp) => ({
       id:           sp.id,
       name:         sp.user.name,
-      email:        sp.user.email,
+      email:        sp.user.email ?? "",
       rollNumber:   sp.rollNumber,
       admissionNo:  sp.admissionNo,
       sectionLabel: `${section.class.name} — Section ${section.name}`,

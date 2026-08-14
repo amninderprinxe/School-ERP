@@ -190,27 +190,45 @@ export async function createAnnouncement(
     void (async () => {
       try {
         const school = await prisma.school.findUnique({
-          where: { id: schoolId }, select: { name: true },
+          where: { id: schoolId },
+          select: { name: true },
         });
+
         const users = await prisma.user.findMany({
-          where: { schoolId, isActive: true, id: { not: user.id } },
+          where: {
+            schoolId,
+            isActive: true,
+            id: { not: user.id },
+          },
           select: { email: true, name: true },
         });
 
         const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/login`;
 
-        await sendAnnouncementEmailBatch(
-          users.map((u) => ({ email: u.email, name: u.name })),
-          {
-            schoolName: school?.name ?? "School",
-            // recipientName: user.name, // filled per recipient in batch
-            announcementTitle: cleanTitle,
-            announcementBody: cleanContent,
-            postedBy: user.name ?? "Admin",
-            postedAt: new Date(),
-            loginUrl,
-          },
-        );
+        const validRecipients: { email: string; name: string }[] = [];
+
+        for (const u of users) {
+          if (u.email && u.email.trim()) {
+            validRecipients.push({
+              email: u.email.trim(),
+              name: u.name,
+            });
+          }
+        }
+
+        if (validRecipients.length > 0) {
+          await sendAnnouncementEmailBatch(
+            validRecipients,
+            {
+              schoolName: school?.name ?? "School",
+              announcementTitle: cleanTitle,
+              announcementBody: cleanContent,
+              postedBy: user.name ?? "Admin",
+              postedAt: new Date(),
+              loginUrl,
+            },
+          );
+        }
       } catch (err) {
         console.error("[announcement email]", err);
       }

@@ -47,7 +47,13 @@ export default async function EditTeacherPage({ params }: Props) {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <TeacherForm
           action={boundAction}
-          initialData={teacher}
+          initialData={
+            teacher?{
+              ...teacher,
+              email: teacher.email ?? "",
+            }
+            : undefined
+            }
           mode="edit"
         />
       </div>

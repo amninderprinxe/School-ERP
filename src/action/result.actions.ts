@@ -320,7 +320,9 @@ export async function saveResults(
             percentage: pct,
             loginUrl,
           };
-          sendResultEmail(sp.user.email, { ...data, recipientName: sp.user.name });
+          if (sp.user.email){
+            sendResultEmail(sp.user.email, { ...data, recipientName: sp.user.name });
+          }
         }
       } catch (err) {
         console.error("[result email]", err);

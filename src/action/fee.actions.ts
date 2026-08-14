@@ -1035,10 +1035,10 @@ export async function recordPayment(
           loginUrl,
         };
         const recipients = [{ email: sp.user.email, name: sp.user.name }];
-        for (const r of recipients) {
-          sendFeeConfirmationEmail(r.email, {
+        if(sp.user.email) {
+          sendFeeConfirmationEmail(sp.user.email, {
             ...emailData,
-            recipientName: r.name,
+            recipientName: sp.user.name,
             transactionRef: emailData.transactionRef ?? "",
           });
         }

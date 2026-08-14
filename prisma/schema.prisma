@@ -178,7 +178,7 @@ model AcademicYear {
 model User {
   id                  String               @id @default(cuid())
   name                String
-  email               String               @unique
+  email               String?               @unique
   password            String
   role                Role
   gender              Gender?
@@ -221,11 +221,14 @@ model TeacherProfile {
 
 model StudentProfile {
   id              String                  @id @default(cuid())
+  studentCode     String?                 @unique
   rollNumber      String?
   admissionNo     String?
   dateOfBirth     DateTime?
   bloodGroup      String?
   address         String?
+  fatherName      String?
+  motherName      String?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
   userId          String                  @unique

@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
-import { generateStudentLoginId } from "@/lib/student-id-utils";
 import {
   CreateStudentSchema,
   UpdateStudentSchema,
@@ -20,19 +19,49 @@ function parseGender(value?: string) {
   if (value === "MALE" || value === "FEMALE" || value === "OTHER") {
     return value;
   }
-
   return null;
 }
 
 function getUniqueConstraintTarget(error: Prisma.PrismaClientKnownRequestError) {
   const target = error.meta?.target;
-
   if (Array.isArray(target)) {
     return target.join(",");
   }
-
   return typeof target === "string" ? target : "";
 }
+
+/**
+ * Helper: Generates sequential permanent Student ID (e.g. KRD-0001, KRD-0002)
+ */
+async function generateSequentialStudentId(
+  tx: Prisma.TransactionClient,
+  schoolId: string,
+  schoolCode: string
+): Promise<string> {
+  const prefix = schoolCode.trim().toUpperCase();
+
+  // Count total students registered under this school
+  const count = await tx.studentProfile.count({
+    where: {
+      user: { schoolId },
+    },
+  });
+
+  let nextNumber = count + 1;
+  let candidateId = `${prefix}-${String(nextNumber).padStart(4, "0")}`;
+
+  // Check and increment if any collision exists (e.g., due to deleted records)
+  while (await tx.user.findUnique({ where: { loginId: candidateId } })) {
+    nextNumber += 1;
+    candidateId = `${prefix}-${String(nextNumber).padStart(4, "0")}`;
+  }
+
+  return candidateId;
+}
+
+// ============================================================
+// CREATE STUDENT
+// ============================================================
 
 export async function createStudent(
   formData: FormData,
@@ -75,16 +104,12 @@ export async function createStudent(
     const cleanRollNumber = rollNumber?.trim() || null;
     const cleanAdmissionNo = admissionNo?.trim() || null;
 
-    /*
-     * Student login ID generate karan layi section,
-     * class name ate school code required ne.
-     */
     if (!sectionId) {
       return {
         success: false,
         error: "Please select a section for the student.",
         fieldErrors: {
-          sectionId: ["Section is required to generate Student ID."],
+          sectionId: ["Section is required for student enrollment."],
         },
       };
     }
@@ -94,19 +119,15 @@ export async function createStudent(
         success: false,
         error: "Please enter the student's roll number.",
         fieldErrors: {
-          rollNumber: ["Roll number is required to generate Student ID."],
+          rollNumber: ["Roll number is required."],
         },
       };
     }
 
+    // 1. Fetch School & Verify School Code
     const school = await prisma.school.findUnique({
-      where: {
-        id: schoolId,
-      },
-      select: {
-        id: true,
-        code: true,
-      },
+      where: { id: schoolId },
+      select: { id: true, code: true },
     });
 
     if (!school) {
@@ -123,6 +144,7 @@ export async function createStudent(
       };
     }
 
+    // 2. Validate Section
     const selectedSection = await prisma.section.findFirst({
       where: {
         id: sectionId,
@@ -150,24 +172,13 @@ export async function createStudent(
       };
     }
 
-    const loginId = generateStudentLoginId({
-      schoolCode: school.code,
-      className: selectedSection.class.name,
-      sectionName: selectedSection.name,
-      rollNumber: cleanRollNumber,
-    });
-
-    /*
-     * Same section ch same roll number duplicate nahi hona chahida.
-     */
+    // 3. Prevent duplicate roll number inside the same section
     const duplicateRollNumber = await prisma.studentProfile.findFirst({
       where: {
         sectionId: selectedSection.id,
         rollNumber: cleanRollNumber,
       },
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
 
     if (duplicateRollNumber) {
@@ -182,52 +193,33 @@ export async function createStudent(
       };
     }
 
-    /*
-     * Generated Student ID globally unique hona chahida.
-     */
-    const duplicateLoginId = await prisma.user.findUnique({
-      where: {
-        loginId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (duplicateLoginId) {
-      return {
-        success: false,
-        error: `Student ID ${loginId} is already assigned.`,
-        fieldErrors: {
-          rollNumber: [
-            "This roll number generates a Student ID that already exists.",
-          ],
-        },
-      };
-    }
-
     const studentHashedPassword = await bcrypt.hash(DEFAULT_PASSWORD, 10);
+    let generatedLoginId = "";
 
+    // 4. Atomic Transaction: Generate Sequential ID & Create Records
     await prisma.$transaction(async (tx) => {
+      generatedLoginId = await generateSequentialStudentId(
+        tx,
+        schoolId,
+        school.code!
+      );
+
       const studentUser = await tx.user.create({
         data: {
           name: name.trim(),
           email: studentEmail,
-          loginId,
+          loginId: generatedLoginId,
           password: studentHashedPassword,
           role: "STUDENT",
           gender: parseGender(gender),
           phone: phone?.trim() || null,
           schoolId,
           isActive: true,
-
           studentProfile: {
             create: {
               rollNumber: cleanRollNumber,
               admissionNo: cleanAdmissionNo,
-              dateOfBirth: dateOfBirth
-                ? new Date(dateOfBirth)
-                : null,
+              dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
               bloodGroup: bloodGroup?.trim() || null,
               sectionId: selectedSection.id,
             },
@@ -241,14 +233,13 @@ export async function createStudent(
       if (!studentUser.studentProfile) {
         throw new Error("Student profile was not created.");
       }
-
     });
 
     revalidatePath(REVALIDATE);
 
     return {
       success: true,
-      message: `Student created successfully. Student ID: ${loginId}. Default password: ${DEFAULT_PASSWORD}`,
+      message: `Student created successfully. Permanent Student ID: ${generatedLoginId} | Default Password: ${DEFAULT_PASSWORD}`,
     };
   } catch (error) {
     if (
@@ -260,12 +251,7 @@ export async function createStudent(
       if (target.includes("loginId")) {
         return {
           success: false,
-          error: "The generated Student ID already exists.",
-          fieldErrors: {
-            rollNumber: [
-              "This class, section and roll number combination already exists.",
-            ],
-          },
+          error: "The generated Student ID already exists. Please try again.",
         };
       }
 
@@ -274,9 +260,7 @@ export async function createStudent(
           success: false,
           error: "A user with this email already exists.",
           fieldErrors: {
-            email: [
-              "Student email is already registered.",
-            ],
+            email: ["Student email is already registered."],
           },
         };
       }
@@ -311,6 +295,10 @@ export async function createStudent(
     };
   }
 }
+
+// ============================================================
+// UPDATE STUDENT
+// ============================================================
 
 export async function updateStudent(
   id: string,
@@ -379,51 +367,14 @@ export async function updateStudent(
     const cleanRollNumber = rollNumber?.trim() || null;
     const cleanSectionId = sectionId || null;
 
-    /*
-     * Old login ID default rakhni aa.
-     * Sirf new section ate roll number available hon te regenerate hovegi.
-     */
-    let updatedLoginId = existingStudent.loginId;
-
-    if (cleanSectionId && cleanRollNumber) {
-      const school = await prisma.school.findUnique({
-        where: {
-          id: schoolId,
-        },
-        select: {
-          code: true,
-        },
-      });
-
-      if (!school) {
-        return {
-          success: false,
-          error: "School not found.",
-        };
-      }
-
-      if (!school.code?.trim()) {
-        return {
-          success: false,
-          error: "Please assign a school code before updating students.",
-        };
-      }
-
+    // Validate section if updated
+    if (cleanSectionId) {
       const selectedSection = await prisma.section.findFirst({
         where: {
           id: cleanSectionId,
           schoolId,
         },
-        select: {
-          id: true,
-          name: true,
-          class: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
+        select: { id: true },
       });
 
       if (!selectedSection) {
@@ -436,91 +387,52 @@ export async function updateStudent(
         };
       }
 
-      const generatedLoginId = generateStudentLoginId({
-        schoolCode: school.code,
-        className: selectedSection.class.name,
-        sectionName: selectedSection.name,
-        rollNumber: cleanRollNumber,
-      });
-
-      const duplicateRollNumber =
-        await prisma.studentProfile.findFirst({
+      // Prevent duplicate roll number in new/current section
+      if (cleanRollNumber) {
+        const duplicateRollNumber = await prisma.studentProfile.findFirst({
           where: {
-            sectionId: selectedSection.id,
+            sectionId: cleanSectionId,
             rollNumber: cleanRollNumber,
             NOT: {
               id: existingStudent.studentProfile.id,
             },
           },
-          select: {
-            id: true,
-          },
+          select: { id: true },
         });
 
-      if (duplicateRollNumber) {
-        return {
-          success: false,
-          error:
-            "This roll number is already assigned in the selected section.",
-          fieldErrors: {
-            rollNumber: [
-              "Choose a different roll number for this section.",
-            ],
-          },
-        };
+        if (duplicateRollNumber) {
+          return {
+            success: false,
+            error:
+              "This roll number is already assigned in the selected section.",
+            fieldErrors: {
+              rollNumber: [
+                "Choose a different roll number for this section.",
+              ],
+            },
+          };
+        }
       }
-
-      const duplicateLoginId = await prisma.user.findFirst({
-        where: {
-          loginId: generatedLoginId,
-          NOT: {
-            id: existingStudent.id,
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (duplicateLoginId) {
-        return {
-          success: false,
-          error: `Student ID ${generatedLoginId} is already assigned.`,
-          fieldErrors: {
-            rollNumber: [
-              "This class, section and roll number combination already exists.",
-            ],
-          },
-        };
-      }
-
-      updatedLoginId = generatedLoginId;
     }
 
+    // 🔒 Permanent Identity Rule: loginId remains untouched on updates!
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
-        where: {
-          id: existingStudent.id,
-        },
+        where: { id: existingStudent.id },
         data: {
           name: name?.trim(),
           email: email?.trim().toLowerCase(),
-          loginId: updatedLoginId,
           gender: parseGender(gender),
           phone: phone?.trim() || null,
         },
       });
 
       await tx.studentProfile.update({
-        where: {
-          id: existingStudent.studentProfile?.id,
-        },
+        where: { id: existingStudent.studentProfile?.id },
         data: {
           rollNumber: cleanRollNumber,
           admissionNo: admissionNo?.trim() || null,
-          dateOfBirth: dateOfBirth
-            ? new Date(dateOfBirth)
-            : null,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
           bloodGroup: bloodGroup?.trim() || null,
           sectionId: cleanSectionId,
         },
@@ -531,10 +443,7 @@ export async function updateStudent(
 
     return {
       success: true,
-      message:
-        updatedLoginId !== existingStudent.loginId
-          ? `Student updated successfully. New Student ID: ${updatedLoginId}`
-          : "Student updated successfully.",
+      message: "Student updated successfully.",
     };
   } catch (error) {
     if (
@@ -542,18 +451,6 @@ export async function updateStudent(
       error.code === "P2002"
     ) {
       const target = getUniqueConstraintTarget(error);
-
-      if (target.includes("loginId")) {
-        return {
-          success: false,
-          error: "The generated Student ID already exists.",
-          fieldErrors: {
-            rollNumber: [
-              "This class, section and roll number combination already exists.",
-            ],
-          },
-        };
-      }
 
       if (target.includes("email")) {
         return {
@@ -596,9 +493,11 @@ export async function updateStudent(
   }
 }
 
-export async function deleteStudent(
-  id: string,
-): Promise<ActionResult> {
+// ============================================================
+// DELETE STUDENT
+// ============================================================
+
+export async function deleteStudent(id: string): Promise<ActionResult> {
   try {
     const currentUser = await requireRole(["SCHOOL_ADMIN"]);
     const schoolId = currentUser.schoolId;

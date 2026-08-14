@@ -1,12 +1,15 @@
 import NextAuth, { type DefaultSession } from "next-auth";
-import { JWT } from "next-auth/jwt";
+import type { JWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 
-// 1. Module Augmentation for TypeScript Safety
+// ============================================================
+// 1. MODULE AUGMENTATION (TypeScript Safety)
+// ============================================================
+
 declare module "next-auth" {
   interface Session {
     user: {
@@ -34,9 +37,12 @@ declare module "next-auth/jwt" {
   }
 }
 
-// 2. Main Auth Config
+// ============================================================
+// 2. MAIN AUTH CONFIGURATION
+// ============================================================
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true, // Vercel deployment laye mandatory hai
+  trustHost: true, // Required for Vercel and reverse proxy environments
   secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   session: {
     strategy: "jwt",
@@ -45,6 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   providers: [
     Credentials({
+      name: "Credentials",
       credentials: {
         identifier: {
           label: "Email or Student ID",
@@ -57,13 +64,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
 
       async authorize(credentials) {
-        const identifier = String(
-          credentials?.identifier ?? ""
-        ).trim();
+        const rawIdentifier = credentials?.identifier;
+        const rawPassword = credentials?.password;
 
-        const password = String(
-          credentials?.password ?? ""
-        );
+        if (
+          typeof rawIdentifier !== "string" ||
+          typeof rawPassword !== "string"
+        ) {
+          return null;
+        }
+
+        const identifier = rawIdentifier.trim();
+        const password = rawPassword;
 
         if (!identifier || !password) {
           return null;
@@ -72,6 +84,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const normalizedEmail = identifier.toLowerCase();
         const normalizedLoginId = identifier.toUpperCase();
 
+        // Single query indexed lookup supporting Email, Admin loginId, and Student ID (e.g., KRD-0001)
         const user = await prisma.user.findFirst({
           where: {
             isActive: true,
@@ -96,15 +109,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const passwordMatches = await bcrypt.compare(
-          password,
-          user.password
-        );
+        const passwordMatches = await bcrypt.compare(password, user.password);
 
         if (!passwordMatches) {
           return null;
         }
 
+        // Return user payload for JWT creation
         return {
           id: user.id,
           name: user.name,
@@ -125,7 +136,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.schoolId = user.schoolId ?? null;
         token.loginId = user.loginId ?? null;
       }
-
       return token;
     },
 
@@ -136,7 +146,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.schoolId = token.schoolId ?? null;
         session.user.loginId = token.loginId ?? null;
       }
-
       return session;
     },
   },

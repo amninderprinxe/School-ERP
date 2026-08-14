@@ -55,7 +55,15 @@ export default async function EditStudentPage({ params }: Props) {
         <StudentForm
           sections={sections}
           action={boundAction}
-          initialData={student}
+          initialData={
+            student?
+          {
+            ...student,
+            email: student.email ?? "",
+          }
+          : undefined
+        }
+         
           mode="edit"
         />
       </div>

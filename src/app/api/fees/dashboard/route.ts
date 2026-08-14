@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth }                      from "@/lib/auth";
 import { prisma }                    from "@/lib/db";
+import type { PaymentStatus, PaymentMode } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,39 @@ function monthLabel(offset = 0): string {
   ));
   return d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
 }
+
+type StudentPaymentDetail = {
+  id:             string;
+  category:       string;
+  amount:         number;
+  paid:           number;
+  waived:         number;
+  outstanding:    number;
+  status:         PaymentStatus | string;
+  dueDate:        Date | null;
+  paymentDate:    Date | null;
+  paymentMode:    PaymentMode | string;
+  transactionRef: string | null;
+};
+
+type StudentMapEntry = {
+  studentProfileId: string;
+  name:             string;
+  email:            string | null;
+  avatarUrl:        string | null;
+  rollNumber:       string | null;
+  sectionLabel:     string;
+  classId:          string;
+  totalFee:         number;
+  collected:        number;
+  outstanding:      number;
+  waived:           number;
+  lastPaymentDate:  Date | null;
+  lastPaymentAmt:   number;
+  nextDueDate:      Date | null;
+  statuses:         (PaymentStatus | string)[];
+  payments:         StudentPaymentDetail[];
+};
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -123,44 +157,12 @@ export async function GET(request: NextRequest) {
   const byMode = Array.from(modeMap.entries()).map(([mode, amount]) => ({ mode, amount }));
 
   // ── Per-student aggregation ───────────────────────────────────
-  const studentMap = new Map<
-    string,
-    {
-      studentProfileId: string;
-      name:             string;
-      email:            string;
-      avatarUrl:        string | null;
-      rollNumber:       string | null;
-      sectionLabel:     string;
-      classId:          string;
-      totalFee:         number;
-      collected:        number;
-      outstanding:      number;
-      waived:           number;
-      lastPaymentDate:  Date | null;
-      lastPaymentAmt:   number;
-      nextDueDate:      Date | null;
-      statuses:         string[];
-      payments:         {
-        id:           string;
-        category:     string;
-        amount:       number;
-        paid:         number;
-        waived:       number;
-        outstanding:  number;
-        status:       string;
-        dueDate:      Date | null;
-        paymentDate:  Date | null;
-        paymentMode:  string;
-        transactionRef: string | null;
-      }[];
-    }
-  >();
+  const studentMap = new Map<string, StudentMapEntry>();
 
   for (const p of allPayments) {
     const sp  = p.studentProfile;
     const key = sp.id;
-    const cur = studentMap.get(key) ?? {
+    const cur: StudentMapEntry = studentMap.get(key) ?? {
       studentProfileId: sp.id,
       name:             sp.user.name,
       email:            sp.user.email,
@@ -170,15 +172,15 @@ export async function GET(request: NextRequest) {
         ? `${sp.section.class.name} — ${sp.section.name}`
         : "Unassigned",
       classId: sp.section?.class.id ?? "",
-      totalFee:       0,
-      collected:      0,
-      outstanding:    0,
-      waived:         0,
+      totalFee:        0,
+      collected:       0,
+      outstanding:     0,
+      waived:          0,
       lastPaymentDate: null,
       lastPaymentAmt:  0,
-      nextDueDate:    null,
-      statuses:       [],
-      payments:       [],
+      nextDueDate:     null,
+      statuses:        [],
+      payments:        [],
     };
 
     const outs = Math.max(0, p.feeStructure.amount - p.amountPaid - p.waivedAmount);
@@ -202,16 +204,16 @@ export async function GET(request: NextRequest) {
     }
 
     cur.payments.push({
-      id:            p.id,
-      category:      p.feeStructure.feeCategory.name,
-      amount:        p.feeStructure.amount,
-      paid:          p.amountPaid,
-      waived:        p.waivedAmount,
-      outstanding:   outs,
-      status:        p.status,
-      dueDate:       p.feeStructure.dueDate,
-      paymentDate:   p.paymentDate,
-      paymentMode:   p.paymentMode,
+      id:             p.id,
+      category:       p.feeStructure.feeCategory.name,
+      amount:         p.feeStructure.amount,
+      paid:           p.amountPaid,
+      waived:         p.waivedAmount,
+      outstanding:    outs,
+      status:         p.status,
+      dueDate:        p.feeStructure.dueDate,
+      paymentDate:    p.paymentDate,
+      paymentMode:    p.paymentMode,
       transactionRef: p.transactionRef,
     });
 
@@ -273,13 +275,13 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => (b.paymentDate ?? b.createdAt).getTime() - (a.paymentDate ?? a.createdAt).getTime())
     .slice(0, 20)
     .map(p => ({
-      id:           p.id,
-      studentName:  p.studentProfile.user.name,
-      category:     p.feeStructure.feeCategory.name,
-      amount:       p.amountPaid,
-      paymentMode:  p.paymentMode,
-      paymentDate:  (p.paymentDate ?? p.createdAt).toISOString(),
-      status:       p.status,
+      id:             p.id,
+      studentName:    p.studentProfile.user.name,
+      category:       p.feeStructure.feeCategory.name,
+      amount:         p.amountPaid,
+      paymentMode:    p.paymentMode,
+      paymentDate:    (p.paymentDate ?? p.createdAt).toISOString(),
+      status:         p.status,
       transactionRef: p.transactionRef,
     }));
 

@@ -91,7 +91,7 @@ export default async function StudentProfilePage({ params }: Props) {
     user: {
       id:        student.id,
       name:      student.name,
-      email:     student.email,
+      email:     student.email ?? "",
       phone:     student.phone,
       gender:    student.gender,
       avatarUrl: student.avatarUrl,
