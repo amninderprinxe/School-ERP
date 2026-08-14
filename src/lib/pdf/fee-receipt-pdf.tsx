@@ -115,22 +115,22 @@ const s = StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center" as const,
     flex: 1,
-    paddingRight: 12,
+    marginRight: 14,
   },
 
   logo: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     objectFit: "contain" as const,
     marginRight: 10,
   },
 
   logoFallback: {
-    width: 46,
-    height: 46,
+    width: 44,
+    height: 44,
     marginRight: 10,
 
-    borderRadius: 23,
+    borderRadius: 22,
     backgroundColor: C.primaryLight,
 
     alignItems: "center" as const,
@@ -139,7 +139,7 @@ const s = StyleSheet.create({
 
   logoFallbackText: {
     fontFamily: F.bold,
-    fontSize: 17,
+    fontSize: 16,
     color: C.primary,
   },
 
@@ -149,8 +149,9 @@ const s = StyleSheet.create({
 
   schoolName: {
     fontFamily: F.bold,
-    fontSize: 16,
+    fontSize: 14,
     color: C.primary,
+    lineHeight: 1.25,
   },
 
   schoolSub: {
@@ -160,12 +161,13 @@ const s = StyleSheet.create({
   },
 
   documentInformation: {
+    width: 170,
     alignItems: "flex-end" as const,
   },
 
   docTitle: {
     fontFamily: F.bold,
-    fontSize: 12,
+    fontSize: 11,
     color: C.secondary,
     textAlign: "right" as const,
   },

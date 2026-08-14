@@ -1,4 +1,3 @@
-
 import type React from "react";
 import {
   Document,
@@ -80,10 +79,21 @@ const s = StyleSheet.create({
     borderBottomStyle: "solid" as const,
   },
 
+  headerLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+
+  headerRight: {
+    width: 170,
+    alignItems: "flex-end" as const,
+  },
+
   schoolName: {
     fontFamily: F.bold,
-    fontSize: 16,
+    fontSize: 14,
     color: C.primary,
+    lineHeight: 1.3,
   },
 
   schoolSub: {
@@ -94,7 +104,7 @@ const s = StyleSheet.create({
 
   docTitle: {
     fontFamily: F.bold,
-    fontSize: 12,
+    fontSize: 11,
     color: C.secondary,
     textAlign: "right" as const,
   },
@@ -350,25 +360,22 @@ export function AttendancePDF({
       subject={`${data.studentName} attendance report`}
     >
       <Page size="A4" style={s.page}>
-        {/* ── Header ───────────────────────────────────────── */}
+        {/* ── Header (Fixed layout boundaries) ─────────────── */}
         <View style={s.header}>
-          <View>
+          <View style={s.headerLeft}>
             <Text style={s.schoolName}>{data.schoolName}</Text>
-
             <Text style={s.schoolSub}>
               Student Attendance Report
             </Text>
           </View>
 
-          <View>
+          <View style={s.headerRight}>
             <Text style={s.docTitle}>
               ATTENDANCE REPORT
             </Text>
-
             <Text style={s.docSub}>
               {data.monthLabel}
             </Text>
-
             <Text style={s.docSub}>
               Generated: {fmtPdfDate(data.generatedAt)}
             </Text>
@@ -399,7 +406,6 @@ export function AttendancePDF({
               <Text style={s.infoLabel}>
                 {item.label}:
               </Text>
-
               <Text style={s.infoVal}>
                 {item.value}
               </Text>
@@ -432,7 +438,6 @@ export function AttendancePDF({
               >
                 {item.value}
               </Text>
-
               <Text style={s.summaryLabel}>
                 {item.label}
               </Text>
@@ -446,15 +451,12 @@ export function AttendancePDF({
             <Text style={[s.thCell, s.colDate]}>
               Date
             </Text>
-
             <Text style={[s.thCell, s.colDay]}>
               Day
             </Text>
-
             <Text style={[s.thCell, s.colStatus]}>
               Status
             </Text>
-
             <Text style={[s.thCell, s.colRemarks]}>
               Remarks
             </Text>
@@ -473,11 +475,9 @@ export function AttendancePDF({
                 <Text style={[s.tdCell, s.colDate]}>
                   {fmtAttDate(record.date)}
                 </Text>
-
                 <Text style={[s.tdCell, s.colDay]}>
                   {dayLabel(record.date)}
                 </Text>
-
                 <Text
                   style={[
                     s.tdCell,
@@ -494,7 +494,6 @@ export function AttendancePDF({
                     record.status ??
                     "Unknown"}
                 </Text>
-
                 <Text style={[s.tdCell, s.colRemarks]}>
                   {record.remarks?.trim() || "—"}
                 </Text>
@@ -512,10 +511,8 @@ export function AttendancePDF({
         {/* ── Footer ───────────────────────────────────────── */}
         <View style={s.footer} fixed>
           <Text style={s.footerText}>
-            {data.schoolName} · {data.studentName} ·{" "}
-            {data.monthLabel}
+            {data.schoolName} · {data.studentName} · {data.monthLabel}
           </Text>
-
           <Text
             style={s.footerText}
             render={({ pageNumber, totalPages }) =>

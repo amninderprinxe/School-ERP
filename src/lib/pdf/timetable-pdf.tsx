@@ -93,7 +93,7 @@ const s = StyleSheet.create({
     alignItems: "center" as const,
 
     flex: 1,
-    paddingRight: 14,
+    marginRight: 16,
   },
 
   logo: {
@@ -128,8 +128,9 @@ const s = StyleSheet.create({
 
   schoolName: {
     fontFamily: F.bold,
-    fontSize: 15,
+    fontSize: 14,
     color: C.primary,
+    lineHeight: 1.25,
   },
 
   schoolSub: {
@@ -139,6 +140,7 @@ const s = StyleSheet.create({
   },
 
   documentInformation: {
+    width: 180,
     alignItems: "flex-end" as const,
   },
 

@@ -38,10 +38,12 @@ export const F = {
 // A4 PDF padding
 export const PAD = 32;
 
-// A4 width in points
+// A4 dimensions in points (Portrait & Landscape reference)
 export const WIDTH = {
   page: 595.28,
   content: 595.28 - PAD * 2,
+  landscapePage: 841.89,
+  landscapeContent: 841.89 - PAD * 2,
 } as const;
 
 // ── Date formatter ────────────────────────────────────────────────
@@ -53,10 +55,7 @@ export function fmtPdfDate(
     return "—";
   }
 
-  const date =
-    value instanceof Date
-      ? value
-      : new Date(value);
+  const date = value instanceof Date ? value : new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return "—";
@@ -122,8 +121,6 @@ export function fmtPct(
     return "0.00%";
   }
 
-  const percentage =
-    (obtainedValue / maximumValue) * 100;
-
+  const percentage = (obtainedValue / maximumValue) * 100;
   return `${percentage.toFixed(2)}%`;
 }
