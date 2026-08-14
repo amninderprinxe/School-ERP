@@ -18,9 +18,7 @@ const REVALIDATE = "/super-admin/schools";
 // HELPERS
 // ─────────────────────────────────────────────────────────────────
 
-async function safelyLogAction(
-  data: Parameters<typeof logAction>[0],
-) {
+async function safelyLogAction(data: Parameters<typeof logAction>[0]) {
   try {
     await logAction(data);
   } catch (error) {
@@ -31,22 +29,23 @@ async function safelyLogAction(
 function revalidateSchoolPages() {
   revalidatePath(REVALIDATE);
   revalidatePath("/super-admin");
-  revalidatePath("/super-admin/users"); // <-- Ensure Users table revalidates immediately
+  revalidatePath("/super-admin/users");
 }
 
 // ─────────────────────────────────────────────────────────────────
-// CREATE SCHOOL & ADMIN (FIXED)
+// CREATE SCHOOL & ADMIN (WITH SCHOOL CODE)
 // ─────────────────────────────────────────────────────────────────
 
-export async function createSchool(
-  formData: FormData,
-): Promise<ActionResult> {
+export async function createSchool(formData: FormData): Promise<ActionResult> {
   try {
     const user = await requireRole(["SUPER_ADMIN"]);
+
+    const rawCode = String(formData.get("code") || "").trim().toUpperCase();
 
     const parsed = SchoolCreateSchema.safeParse({
       name: formData.get("name"),
       slug: formData.get("slug"),
+      code: rawCode || undefined,
       email: formData.get("email"),
       phone: formData.get("phone"),
       address: formData.get("address"),
@@ -60,16 +59,11 @@ export async function createSchool(
       };
     }
 
-    const {
-      name,
-      slug,
-      email,
-      phone,
-      address,
-    } = parsed.data;
+    const { name, slug, email, phone, address } = parsed.data;
 
     const cleanName = name.trim();
     const cleanSlug = slug.trim().toLowerCase();
+    const cleanCode = rawCode || (cleanName.slice(0, 3).toUpperCase());
     const cleanEmail = email?.trim().toLowerCase() || null;
     const cleanPhone = phone?.trim() || null;
     const cleanAddress = address?.trim() || null;
@@ -92,16 +86,18 @@ export async function createSchool(
     }
 
     // Default password "Password@123" fallback
-    const rawAdminPassword = String(formData.get("adminPassword") || "").trim() || "Password@123";
+    const rawAdminPassword =
+      String(formData.get("adminPassword") || "").trim() || "Password@123";
     const hashedPassword = await bcrypt.hash(rawAdminPassword, 10);
 
-    // 🔴 STAGE 2: Create School and Admin in a single transactio
+    // 🔴 STAGE 2: Create School and Admin in a single transaction
     const createdSchool = await prisma.$transaction(async (tx) => {
-      // 1. Create School
+      // 1. Create School with Code
       const school = await tx.school.create({
         data: {
           name: cleanName,
           slug: cleanSlug,
+          code: cleanCode, // 👈 Saved in database
           email: cleanEmail,
           phone: cleanPhone,
           address: cleanAddress,
@@ -111,6 +107,7 @@ export async function createSchool(
           id: true,
           name: true,
           slug: true,
+          code: true,
           email: true,
           phone: true,
           address: true,
@@ -123,7 +120,7 @@ export async function createSchool(
         data: {
           name: adminName,
           email: adminEmail,
-          loginId: adminEmail, // Strictly Email as username
+          loginId: adminEmail, // Email as login ID for Admin
           password: hashedPassword,
           role: "SCHOOL_ADMIN",
           schoolId: school.id,
@@ -145,6 +142,7 @@ export async function createSchool(
       entityName: createdSchool.name,
       metadata: {
         slug: createdSchool.slug,
+        code: createdSchool.code,
         email: createdSchool.email,
         phone: createdSchool.phone,
         address: createdSchool.address,
@@ -163,11 +161,23 @@ export async function createSchool(
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
+      const target = (error.meta?.target as string[]) || [];
+      const isCode = target.includes("code");
+      const isSlug = target.includes("slug");
+      const isEmail = target.includes("email");
+
       return {
         success: false,
-        error: "A school with this slug or a user with this email already exists.",
+        error: isCode
+          ? "A school with this School Code already exists."
+          : isSlug
+          ? "A school with this Slug already exists."
+          : isEmail
+          ? "A user with this Admin Email already exists."
+          : "A unique constraint violation occurred (Slug, Code, or Admin Email already in use).",
         fieldErrors: {
-          slug: ["Slug or Admin Email must be globally unique."],
+          code: isCode ? ["School code must be unique."] : undefined,
+          slug: isSlug ? ["Slug must be globally unique."] : undefined,
         },
       };
     }
@@ -182,7 +192,7 @@ export async function createSchool(
 }
 
 // ─────────────────────────────────────────────────────────────────
-// UPDATE SCHOOL
+// UPDATE SCHOOL (WITH SCHOOL CODE)
 // ─────────────────────────────────────────────────────────────────
 
 export async function updateSchool(
@@ -193,13 +203,12 @@ export async function updateSchool(
     const user = await requireRole(["SUPER_ADMIN"]);
 
     const existing = await prisma.school.findUnique({
-      where: {
-        id,
-      },
+      where: { id },
       select: {
         id: true,
         name: true,
         slug: true,
+        code: true,
         email: true,
         phone: true,
         address: true,
@@ -214,9 +223,12 @@ export async function updateSchool(
       };
     }
 
+    const rawCode = String(formData.get("code") || "").trim().toUpperCase();
+
     const parsed = SchoolUpdateSchema.safeParse({
       name: formData.get("name"),
       slug: formData.get("slug"),
+      code: rawCode || undefined,
       email: formData.get("email"),
       phone: formData.get("phone"),
       address: formData.get("address"),
@@ -231,28 +243,21 @@ export async function updateSchool(
       };
     }
 
-    const {
-      name,
-      slug,
-      email,
-      phone,
-      address,
-      status,
-    } = parsed.data;
+    const { name, slug, email, phone, address, status } = parsed.data;
 
     const cleanName = name.trim();
     const cleanSlug = slug.trim().toLowerCase();
+    const cleanCode = rawCode || existing.code;
     const cleanEmail = email?.trim().toLowerCase() || null;
     const cleanPhone = phone?.trim() || null;
     const cleanAddress = address?.trim() || null;
 
     const updatedSchool = await prisma.school.update({
-      where: {
-        id: existing.id,
-      },
+      where: { id: existing.id },
       data: {
         name: cleanName,
         slug: cleanSlug,
+        code: cleanCode,
         email: cleanEmail,
         phone: cleanPhone,
         address: cleanAddress,
@@ -262,6 +267,7 @@ export async function updateSchool(
         id: true,
         name: true,
         slug: true,
+        code: true,
         email: true,
         phone: true,
         address: true,
@@ -280,6 +286,7 @@ export async function updateSchool(
       entityName: updatedSchool.name,
       metadata: {
         slug: updatedSchool.slug,
+        code: updatedSchool.code,
         email: updatedSchool.email,
         phone: updatedSchool.phone,
         address: updatedSchool.address,
@@ -287,6 +294,7 @@ export async function updateSchool(
 
         previousName: existing.name,
         previousSlug: existing.slug,
+        previousCode: existing.code,
         previousEmail: existing.email,
         previousPhone: existing.phone,
         previousAddress: existing.address,
@@ -307,11 +315,9 @@ export async function updateSchool(
     ) {
       return {
         success: false,
-        error: "A school with this slug already exists.",
+        error: "A school with this slug or code already exists.",
         fieldErrors: {
-          slug: [
-            "Slug must be globally unique. Choose a different one.",
-          ],
+          slug: ["Slug or School Code must be unique."],
         },
       };
     }
@@ -330,16 +336,12 @@ export async function updateSchool(
 // ACTIVE ↔ SUSPENDED
 // ─────────────────────────────────────────────────────────────────
 
-export async function toggleSchoolStatus(
-  id: string,
-): Promise<ActionResult> {
+export async function toggleSchoolStatus(id: string): Promise<ActionResult> {
   try {
     const user = await requireRole(["SUPER_ADMIN"]);
 
     const school = await prisma.school.findUnique({
-      where: {
-        id,
-      },
+      where: { id },
       select: {
         id: true,
         name: true,
@@ -356,19 +358,11 @@ export async function toggleSchoolStatus(
     }
 
     const previousStatus = school.status;
-
-    const newStatus =
-      school.status === "ACTIVE"
-        ? "SUSPENDED"
-        : "ACTIVE";
+    const newStatus = school.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
 
     const updatedSchool = await prisma.school.update({
-      where: {
-        id: school.id,
-      },
-      data: {
-        status: newStatus,
-      },
+      where: { id: school.id },
+      data: { status: newStatus },
       select: {
         id: true,
         name: true,
@@ -416,16 +410,12 @@ export async function toggleSchoolStatus(
 // DELETE SCHOOL
 // ─────────────────────────────────────────────────────────────────
 
-export async function deleteSchool(
-  id: string,
-): Promise<ActionResult> {
+export async function deleteSchool(id: string): Promise<ActionResult> {
   try {
     const user = await requireRole(["SUPER_ADMIN"]);
 
     const school = await prisma.school.findUnique({
-      where: {
-        id,
-      },
+      where: { id },
       select: {
         id: true,
         name: true,
@@ -479,9 +469,7 @@ export async function deleteSchool(
     });
 
     await prisma.school.delete({
-      where: {
-        id: school.id,
-      },
+      where: { id: school.id },
     });
 
     revalidateSchoolPages();

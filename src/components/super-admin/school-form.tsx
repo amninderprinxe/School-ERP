@@ -9,6 +9,7 @@ import type { ActionResult } from "@/types/actions";
 interface SchoolInitialData {
   name: string;
   slug: string;
+  code?: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
@@ -49,8 +50,7 @@ export function SchoolForm({ action, initialData, mode }: SchoolFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
-  const [fe, setFe] =
-    useState<Record<string, string[] | undefined>>({});
+  const [fe, setFe] = useState<Record<string, string[] | undefined>>({});
 
   // Slug state
   const [slug, setSlug] = useState(initialData?.slug ?? "");
@@ -86,7 +86,6 @@ export function SchoolForm({ action, initialData, mode }: SchoolFormProps) {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-
       {/* ── Global error banner ───────────────────────────── */}
       {formError && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -95,24 +94,51 @@ export function SchoolForm({ action, initialData, mode }: SchoolFormProps) {
       )}
 
       <div className="space-y-5">
+        {/* ── School Name & School Code ──────────────────── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* School Name */}
+          <div className="md:col-span-2">
+            <label className={LABEL}>
+              School Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="name"
+              required
+              defaultValue={initialData?.name ?? ""}
+              placeholder="e.g. Greenwood High School"
+              onChange={handleNameChange}
+              className={INPUT}
+            />
+            {fe.name && (
+              <p className="text-xs text-red-500 mt-1">{fe.name[0]}</p>
+            )}
+          </div>
 
-        {/* ── School Name ───────────────────────────────── */}
-        <div>
-          <label className={LABEL}>
-            School Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            name="name"
-            required
-            defaultValue={initialData?.name ?? ""}
-            placeholder="e.g. Greenwood High School"
-            onChange={handleNameChange}
-            className={INPUT}
-          />
-          {fe.name && (
-            <p className="text-xs text-red-500 mt-1">{fe.name[0]}</p>
-          )}
+          {/* School Code (Prefix) */}
+          <div>
+            <label className={LABEL}>
+              School Code <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="code"
+              required
+              maxLength={10}
+              defaultValue={initialData?.code ?? ""}
+              placeholder="e.g. KRD, DPS"
+              className={`${INPUT} font-mono uppercase tracking-wider`}
+              onChange={(e) => {
+                e.target.value = e.target.value.toUpperCase();
+              }}
+            />
+            {fe.code && (
+              <p className="text-xs text-red-500 mt-1">{fe.code[0]}</p>
+            )}
+            <p className="text-xs text-gray-400 mt-1">
+              Prefix for IDs (e.g. KRD-0001)
+            </p>
+          </div>
         </div>
 
         {/* ── Slug ─────────────────────────────────────── */}
@@ -297,7 +323,6 @@ export function SchoolForm({ action, initialData, mode }: SchoolFormProps) {
             </p>
           </div>
         )}
-
       </div>
 
       {/* ── Footer ────────────────────────────────────────── */}
@@ -308,13 +333,11 @@ export function SchoolForm({ action, initialData, mode }: SchoolFormProps) {
 
         <Link
           href="/super-admin/schools"
-          className="px-5 py-2.5 text-sm font-medium text-gray-600
-            bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          className="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
         >
           Cancel
         </Link>
       </div>
-
     </form>
   );
 }

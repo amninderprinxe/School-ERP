@@ -11,17 +11,28 @@ const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const schoolBase = {
   name: z
     .string()
-    .min(2,   "School name must be at least 2 characters")
+    .min(2, "School name must be at least 2 characters")
     .max(150, "School name is too long"),
 
   slug: z
     .string()
-    .min(2,  "Slug must be at least 2 characters")
+    .min(2, "Slug must be at least 2 characters")
     .max(60, "Slug must be 60 characters or less")
     .regex(
       slugPattern,
       "Slug can only contain lowercase letters, numbers, and hyphens (e.g. greenwood-high)",
     ),
+
+  // ── School Code (Prefix for IDs like KRD, DPS) ───────────────
+  code: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .min(2, "School code must be at least 2 characters")
+      .max(10, "School code must be 10 characters or less")
+      .transform((val) => val.toUpperCase())
+      .optional(),
+  ),
 
   email: z.preprocess(
     emptyToUndefined,
@@ -45,9 +56,9 @@ export const SchoolCreateSchema = z.object(schoolBase);
 // ── Update schema (includes status) ───────────────────────────
 export const SchoolUpdateSchema = z.object({
   ...schoolBase,
- status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"], {
-  message: "Please select a valid status",
-}),
+  status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"], {
+    message: "Please select a valid status",
+  }),
 });
 
 export type SchoolCreateInput = z.infer<typeof SchoolCreateSchema>;

@@ -89,6 +89,7 @@ export default async function SuperAdminSchoolsPage() {
                 <tr className="bg-gray-50 border-b border-gray-100">
                   {[
                     "School",
+                    "Code",
                     "Slug",
                     "Status",
                     "Users",
@@ -132,6 +133,17 @@ export default async function SuperAdminSchoolsPage() {
                           )}
                         </div>
                       </div>
+                    </td>
+
+                    {/* School Code (Prefix) */}
+                    <td className="px-5 py-4">
+                      {school.code ? (
+                        <span className="inline-flex items-center font-mono text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                          {school.code}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">—</span>
+                      )}
                     </td>
 
                     {/* Slug */}
