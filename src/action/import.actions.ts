@@ -27,12 +27,6 @@ type ImportActionResult =
       error: string;
     };
 
-type SectionCacheValue = {
-  id: string;
-  name: string;
-  className: string;
-} | null;
-
 const DEFAULT_PASSWORD = "Password@123";
 
 // ─────────────────────────────────────────────────────────────────
@@ -54,6 +48,15 @@ async function safelyLogAction(data: Parameters<typeof logAction>[0]) {
   } catch (error) {
     console.error("[import-audit-log]", error);
   }
+}
+
+function cleanName(val: string): string {
+  return val
+    .toLowerCase()
+    .replace(/class|grade|section/gi, "")
+    .replace(/(\d+)(st|nd|rd|th)/gi, "$1") // "6th" -> "6"
+    .replace(/[^a-z0-9]/g, "")            // remove extra spaces/symbols
+    .trim();
 }
 
 function toGender(value?: string): Gender | null {
@@ -126,7 +129,7 @@ async function sendWelcomeEmailSafe(
 }
 
 // ─────────────────────────────────────────────────────────────────
-// IMPORT STUDENTS (EMAIL OPTIONAL)
+// IMPORT STUDENTS
 // ─────────────────────────────────────────────────────────────────
 
 export async function importStudents(
@@ -195,7 +198,17 @@ export async function importStudents(
       errors: [],
     };
 
-    const sectionCache = new Map<string, SectionCacheValue>();
+    // Pre-fetch all school sections for matching
+    const schoolSections = await prisma.section.findMany({
+      where: { schoolId },
+      select: {
+        id: true,
+        name: true,
+        class: {
+          select: { id: true, name: true },
+        },
+      },
+    });
 
     // Initialize sequential counter
     let currentStudentCount = await prisma.studentProfile.count({
@@ -210,16 +223,14 @@ export async function importStudents(
 
       try {
         const name = row.name?.trim();
-        // Email optional: normalized to null if blank
         const rawEmail = row.email && row.email.trim() !== "" ? row.email.trim().toLowerCase() : null;
-        const className = row.className?.trim();
-        const sectionName = row.sectionName?.trim();
+        const className = row.className ? String(row.className).trim() : "";
+        const sectionName = row.sectionName ? String(row.sectionName).trim() : "";
         const rollNumber = row.rollNumber ? String(row.rollNumber).trim() : "";
         const admissionNo = row.admissionNo ? String(row.admissionNo).trim() : "";
         const fatherName = row.fatherName?.trim() || null;
         const motherName = row.motherName?.trim() || null;
         
-        // Extract studentCode from CSV (studentId or studentCode column)
         const rawStudentCode = row.studentId ?? row.studentCode;
         const studentCode = rawStudentCode ? String(rawStudentCode).trim() : null;
 
@@ -263,7 +274,7 @@ export async function importStudents(
           continue;
         }
 
-        // Check duplicate email ONLY if email was explicitly provided
+        // Check duplicate email ONLY if provided
         if (rawEmail) {
           const existingEmail = await prisma.user.findUnique({
             where: { email: rawEmail },
@@ -281,39 +292,24 @@ export async function importStudents(
           }
         }
 
-        // Section & Class cache lookup
-        const cacheKey = `${className}|${sectionName}`.toUpperCase();
-        let selectedSection = sectionCache.get(cacheKey);
+        // Flexible match for Class & Section (e.g. "6th" with "Class 6", "A" with "Section A")
+        const targetClass = cleanName(className);
+        const targetSection = cleanName(sectionName);
 
-        if (!sectionCache.has(cacheKey)) {
-          const section = await prisma.section.findFirst({
-            where: {
-              schoolId,
-              name: { equals: sectionName },
-              class: {
-                name: { equals: className },
-                schoolId,
-              },
-            },
-            select: {
-              id: true,
-              name: true,
-              class: {
-                select: { name: true },
-              },
-            },
-          });
+        const selectedSection = schoolSections.find((s) => {
+          const dbClassClean = cleanName(s.class.name);
+          const dbSectionClean = cleanName(s.name);
 
-          selectedSection = section
-            ? {
-                id: section.id,
-                name: section.name,
-                className: section.class.name,
-              }
-            : null;
+          const classMatches =
+            dbClassClean === targetClass ||
+            s.class.name.toLowerCase() === className.toLowerCase();
 
-          sectionCache.set(cacheKey, selectedSection);
-        }
+          const sectionMatches =
+            dbSectionClean === targetSection ||
+            s.name.toLowerCase() === sectionName.toLowerCase();
+
+          return classMatches && sectionMatches;
+        });
 
         if (!selectedSection) {
           result.failed++;
@@ -325,7 +321,7 @@ export async function importStudents(
           continue;
         }
 
-        // Verify section roll number uniqueness
+        // Check duplicate roll number inside section
         const duplicateRollNumber = await prisma.studentProfile.findFirst({
           where: {
             sectionId: selectedSection.id,
@@ -339,12 +335,12 @@ export async function importStudents(
           result.errors.push({
             row: rowNumber,
             email: rawEmail || "",
-            reason: `Roll number ${rollNumber} already exists in ${className}-${sectionName}.`,
+            reason: `Roll number ${rollNumber} already exists in ${selectedSection.class.name}-${selectedSection.name}.`,
           });
           continue;
         }
 
-        // Generate next sequential permanent Login ID (e.g. KRD-0001)
+        // Generate next unique Login ID (e.g. KRD-0001)
         currentStudentCount++;
         let loginId = `${schoolPrefix}-${String(currentStudentCount).padStart(4, "0")}`;
 
@@ -353,7 +349,7 @@ export async function importStudents(
           loginId = `${schoolPrefix}-${String(currentStudentCount).padStart(4, "0")}`;
         }
 
-        // Create User & StudentProfile
+        // Create User and StudentProfile
         await prisma.user.create({
           data: {
             name,
@@ -367,7 +363,7 @@ export async function importStudents(
             isActive: true,
             studentProfile: {
               create: {
-                studentCode, // Official Student ID (e.g. 12615189)
+                studentCode,
                 rollNumber,
                 admissionNo: admissionNo || null,
                 dateOfBirth: toDateOrNull(row.dateOfBirth),
@@ -380,7 +376,6 @@ export async function importStudents(
           },
         });
 
-        // Dispatch welcome email only if email is present
         if (rawEmail) {
           sendWelcomeEmailSafe(rawEmail, {
             schoolName: school.name,
