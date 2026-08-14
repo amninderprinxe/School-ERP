@@ -7,7 +7,7 @@ import { calcOutstanding } from "@/lib/fee-utils";
 import {
   CalendarCheck, ClipboardList, Wallet,
   Award, TrendingUp, AlertCircle,
-  CheckCircle2, BookMarked,
+  CheckCircle2, BookMarked, UserCheck,
 }                        from "lucide-react";
 
 export const metadata = { title: "Student Dashboard" };
@@ -38,13 +38,19 @@ export default async function StudentDashboard() {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const in30Days   = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  // ── Student profile ───────────────────────────────────────────
-  const studentProfile = await prisma.studentProfile.findUnique({
-    where:   { userId: user.id },
-    include: {
-      section: { include: { class: { select: { id: true, name: true } } } },
-    },
-  });
+  // ── Student profile with Full ID details ──────────────────────
+  const [dbUser, studentProfile] = await Promise.all([
+    prisma.user.findUnique({
+      where:  { id: user.id },
+      select: { loginId: true, name: true, email: true },
+    }),
+    prisma.studentProfile.findUnique({
+      where:   { userId: user.id },
+      include: {
+        section: { include: { class: { select: { id: true, name: true } } } },
+      },
+    }),
+  ]);
 
   if (!studentProfile) {
     return (
@@ -142,21 +148,67 @@ export default async function StudentDashboard() {
   return (
     <div className="space-y-6">
 
-      {/* ── Greeting ─────────────────────────────────────────── */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {greet(user.name ?? "User")}
-        </h1> 
-        <p className="text-sm text-gray-500 mt-0.5">
-          {studentProfile.section
-            ? `${studentProfile.section.class.name} — Section ${studentProfile.section.name}`
-            : "No section assigned"}
-          {studentProfile.rollNumber && (
-            <span className="ml-2 font-mono text-gray-400">
-              · Roll {studentProfile.rollNumber}
+      {/* ── Header with Student Details & IDs ──────────────────── */}
+      <div className="flex flex-col gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            {greet(user.name ?? "User")}
+          </h1> 
+          <p className="text-sm text-gray-500 mt-1 flex flex-wrap items-center gap-x-2">
+            <span>
+              {studentProfile.section
+                ? `${studentProfile.section.class.name} — Section ${studentProfile.section.name}`
+                : "No section assigned"}
             </span>
+            {studentProfile.rollNumber && (
+              <span className="font-mono text-gray-400">
+                · Roll {studentProfile.rollNumber}
+              </span>
+            )}
+            {studentProfile.fatherName && (
+              <span className="text-gray-400">
+                · S/D/O {studentProfile.fatherName}
+              </span>
+            )}
+          </p>
+        </div>
+
+        {/* ── Student & Campus ID Badges ───────────────────────── */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Campus Login ID */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-3.5 py-1.5 text-center">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-blue-600">
+              Campus ID
+            </span>
+            <span className="font-mono text-xs font-bold text-blue-900">
+              {dbUser?.loginId ?? "—"}
+            </span>
+          </div>
+
+          {/* Official Student ID */}
+          {studentProfile.studentCode && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50/80 px-3.5 py-1.5 text-center">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-purple-600">
+                Student ID
+              </span>
+              <span className="font-mono text-xs font-bold text-purple-900">
+                {studentProfile.studentCode}
+              </span>
+            </div>
           )}
-        </p>
+
+          {/* Admission No */}
+          {studentProfile.admissionNo && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-center">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                Adm No
+              </span>
+              <span className="font-mono text-xs font-bold text-gray-800">
+                {studentProfile.admissionNo}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Attendance warning ───────────────────────────────── */}

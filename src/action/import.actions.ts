@@ -92,11 +92,10 @@ function revalidateTeacherImportPages() {
 }
 
 async function sendWelcomeEmailSafe(
-  email: string,
+  email: string | null,
   data: {
     schoolName: string;
     recipientName: string;
-    email: string;
     loginId: string;
     password: string;
     role: string;
@@ -110,7 +109,7 @@ async function sendWelcomeEmailSafe(
   try {
     if (typeof sendEmail === "function") {
       await sendEmail({
-        to: email,
+        to: email.trim(),
         subject: `Welcome to ${data.schoolName} - Your Campus-X Login Details`,
         html: `
           <p>Dear ${data.recipientName},</p>
@@ -134,6 +133,8 @@ export async function importStudents(
   rows: (StudentImportRow & {
     fatherName?: string;
     motherName?: string;
+    studentId?: string | number;
+    studentCode?: string | number;
   })[],
 ): Promise<ImportActionResult> {
   try {
@@ -196,7 +197,7 @@ export async function importStudents(
 
     const sectionCache = new Map<string, SectionCacheValue>();
 
-    // Sequential counter initialization
+    // Initialize sequential counter
     let currentStudentCount = await prisma.studentProfile.count({
       where: { user: { schoolId } },
     });
@@ -216,6 +217,10 @@ export async function importStudents(
         const admissionNo = row.admissionNo ? String(row.admissionNo).trim() : "";
         const fatherName = row.fatherName?.trim() || null;
         const motherName = row.motherName?.trim() || null;
+        
+        // Extract studentCode from CSV (studentId or studentCode column)
+        const rawStudentCode = row.studentId ?? row.studentCode;
+        const studentCode = rawStudentCode ? String(rawStudentCode).trim() : null;
 
         if (!name) {
           result.failed++;
@@ -257,7 +262,7 @@ export async function importStudents(
           continue;
         }
 
-        // Check if provided email already exists (only when email is given)
+        // Check duplicate email if provided
         if (rawEmail) {
           const existingEmail = await prisma.user.findUnique({
             where: { email: rawEmail },
@@ -283,9 +288,9 @@ export async function importStudents(
           const section = await prisma.section.findFirst({
             where: {
               schoolId,
-              name: sectionName,
+              name: { equals: sectionName },
               class: {
-                name: className,
+                name: { equals: className },
                 schoolId,
               },
             },
@@ -338,7 +343,7 @@ export async function importStudents(
           continue;
         }
 
-        // Generate next sequential permanent Login ID (e.g., KRD-0001)
+        // Generate next sequential permanent Login ID (e.g. KRD-0001)
         currentStudentCount++;
         let loginId = `${schoolPrefix}-${String(currentStudentCount).padStart(4, "0")}`;
 
@@ -347,11 +352,11 @@ export async function importStudents(
           loginId = `${schoolPrefix}-${String(currentStudentCount).padStart(4, "0")}`;
         }
 
-        // Create User & StudentProfile (Email is saved as null if empty)
+        // Create User & StudentProfile
         await prisma.user.create({
           data: {
             name,
-            email: rawEmail, // null if blank
+            email: rawEmail,
             loginId,
             password: hashedPassword,
             role: "STUDENT",
@@ -361,6 +366,7 @@ export async function importStudents(
             isActive: true,
             studentProfile: {
               create: {
+                studentCode, // Official Student ID (e.g. 12615189)
                 rollNumber,
                 admissionNo: admissionNo || null,
                 dateOfBirth: toDateOrNull(row.dateOfBirth),
@@ -373,12 +379,11 @@ export async function importStudents(
           },
         });
 
-        // Dispatch email only if student has an actual email
+        // Dispatch welcome email only if email is present
         if (rawEmail) {
           sendWelcomeEmailSafe(rawEmail, {
             schoolName: school.name,
             recipientName: name,
-            email: rawEmail,
             loginId,
             password: DEFAULT_PASSWORD,
             role: "STUDENT",
@@ -556,7 +561,6 @@ export async function importTeachers(
         sendWelcomeEmailSafe(email, {
           schoolName: school.name,
           recipientName: name,
-          email,
           loginId: email,
           password: DEFAULT_PASSWORD,
           role: "TEACHER",
