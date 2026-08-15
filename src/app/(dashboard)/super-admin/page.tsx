@@ -19,8 +19,8 @@ function greet(name: string | null): string {
   return `Good ${t}${fn ? `, ${fn}` : ""}`;
 }
 
-function relTime(d: Date): string {
-  const diff = Date.now() - new Date(d).getTime();
+function relTime(dateInput: Date | string): string {
+  const diff = Date.now() - new Date(dateInput).getTime();
   const m = Math.floor(diff / 60_000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
@@ -39,8 +39,8 @@ export default async function SuperAdminDashboard() {
     schoolsByStatus,
     totalUsers,
     todayLogs,
-    recentSchools,
-    recentAudit,
+    recentSchoolsRaw,
+    recentAuditRaw,
   ] = await Promise.all([
     // School counts grouped by status
     prisma.school.groupBy({
@@ -84,9 +84,28 @@ export default async function SuperAdminDashboard() {
     }),
   ]);
 
-  const totalSchools = schoolsByStatus.reduce((s, g) => s + g._count._all, 0);
-  const activeSchools = schoolsByStatus.find((g) => g.status === "ACTIVE")?._count._all ?? 0;
-  const suspendedCount = schoolsByStatus.find((g) => g.status === "SUSPENDED")?._count._all ?? 0;
+  const totalSchools = schoolsByStatus.reduce((s, g) => s + (g._count?._all ?? 0), 0);
+  const activeSchools = schoolsByStatus.find((g) => g.status === "ACTIVE")?._count?._all ?? 0;
+  const suspendedCount = schoolsByStatus.find((g) => g.status === "SUSPENDED")?._count?._all ?? 0;
+
+  // Plain JSON serialization to avoid React Error #441
+  const recentSchools = recentSchoolsRaw.map((s) => ({
+    id: s.id,
+    name: s.name,
+    status: s.status,
+    userCount: s._count?.users ?? 0,
+    timeAgo: relTime(s.createdAt),
+  }));
+
+  const recentAudit = recentAuditRaw.map((log) => ({
+    id: log.id,
+    action: log.action,
+    entity: log.entity,
+    entityName: log.entityName,
+    userName: log.userName ?? "User",
+    schoolName: log.schoolName ?? "Platform",
+    timeAgo: relTime(log.createdAt),
+  }));
 
   const STATUS_STYLE: Record<string, string> = {
     ACTIVE: "bg-green-100 text-green-700",
@@ -100,7 +119,7 @@ export default async function SuperAdminDashboard() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {greet(user.name ?? "User")}
+            {greet(user?.name ?? "User")}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5" />
@@ -117,7 +136,7 @@ export default async function SuperAdminDashboard() {
         </p>
       </div>
 
-      {/* ── Stat cards (Direct JSX to avoid serialization crash) ─ */}
+      {/* ── Stat cards ───────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1 */}
         <Link
@@ -242,8 +261,7 @@ export default async function SuperAdminDashboard() {
                       {school.name}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {school._count.users} user{school._count.users !== 1 ? "s" : ""} ·{" "}
-                      {relTime(school.createdAt)}
+                      {school.userCount} user{school.userCount !== 1 ? "s" : ""} · {school.timeAgo}
                     </p>
                   </div>
                   <span
@@ -283,7 +301,7 @@ export default async function SuperAdminDashboard() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-gray-900 leading-snug">
-                      {log.userName ?? "User"}
+                      {log.userName}
                       <span className="font-normal text-gray-500">
                         {" "}
                         {log.action ? log.action.toLowerCase().replace(/_/g, " ") : "action"}{" "}
@@ -293,7 +311,7 @@ export default async function SuperAdminDashboard() {
                       )}
                     </p>
                     <p className="text-[11px] text-gray-400 mt-0.5">
-                      {log.schoolName ?? "Platform"} · {relTime(log.createdAt)}
+                      {log.schoolName} · {log.timeAgo}
                     </p>
                   </div>
                 </li>
