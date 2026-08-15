@@ -17,13 +17,19 @@ const TYPE_COLOR: Record<string, string> = {
   announcement: "#0891b2",
 };
 
-async function resolveSchoolId(userId: string, sessionSchoolId?: string | null): Promise<string | null> {
-  if (sessionSchoolId) return sessionSchoolId;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+async function getSchoolIdFromSession(session: any): Promise<string | null> {
+  if (session?.user?.schoolId) return session.user.schoolId;
+
+  // Fallback: Find user by ID or Email
+  const identifier = session?.user?.id ? { id: session.user.id } : session?.user?.email ? { email: session.user.email } : null;
+  if (!identifier) return null;
+
+  const dbUser = await prisma.user.findFirst({
+    where: identifier,
     select: { schoolId: true },
   });
-  return user?.schoolId ?? null;
+
+  return dbUser?.schoolId ?? null;
 }
 
 function toDateString(d: any): string {
@@ -40,18 +46,19 @@ function toDateString(d: any): string {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// GET — fetch all events
+// GET — Fetch All School Calendar Events
 // ─────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    if (!session?.user) {
       return NextResponse.json([], { status: 401 });
     }
 
-    const schoolId = await resolveSchoolId(session.user.id, (session.user as any).schoolId);
+    const schoolId = await getSchoolIdFromSession(session);
     if (!schoolId) {
+      console.warn("[CALENDAR_GET] No schoolId found for user:", session.user);
       return NextResponse.json([]);
     }
 
@@ -60,7 +67,7 @@ export async function GET(request: NextRequest) {
         prisma.exam.findMany({
           where: { schoolId },
           include: { class: { select: { name: true } } },
-        }).catch(() => []),
+        }).catch((e: any) => { console.error("exams err", e); return []; }),
 
         prisma.ptmSlot.findMany({
           where: { schoolId },
@@ -72,25 +79,25 @@ export async function GET(request: NextRequest) {
               },
             },
           },
-        }).catch(() => []),
+        }).catch((e: any) => { console.error("ptm err", e); return []; }),
 
         prisma.holiday.findMany({
           where: { schoolId },
-        }).catch(() => []),
+        }).catch((e: any) => { console.error("holiday err", e); return []; }),
 
         prisma.feeStructure.findMany({
           where: { schoolId },
           include: { feeCategory: { select: { name: true } } },
-        }).catch(() => []),
+        }).catch((e: any) => { console.error("fee err", e); return []; }),
 
         prisma.schoolEvent.findMany({
           where: { schoolId },
           include: { createdBy: { select: { name: true } } },
-        }).catch(() => []),
+        }).catch((e: any) => { console.error("schoolEvents err", e); return []; }),
 
         prisma.announcement.findMany({
           where: { schoolId },
-        }).catch(() => []),
+        }).catch((e: any) => { console.error("announcement err", e); return []; }),
       ]);
 
     const events: Record<string, unknown>[] = [];
@@ -199,16 +206,22 @@ export async function GET(request: NextRequest) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// POST — create school event
+// POST — Create School Event
 // ─────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
-  if (session.user.role !== "SCHOOL_ADMIN") return new NextResponse("Forbidden", { status: 403 });
+  if (!session?.user) return new NextResponse("Unauthorized", { status: 401 });
 
-  const schoolId = await resolveSchoolId(session.user.id, (session.user as any).schoolId);
+  const schoolId = await getSchoolIdFromSession(session);
   if (!schoolId) return new NextResponse("No school assigned", { status: 400 });
+
+  // Get user ID
+  let userId = session.user.id;
+  if (!userId && session.user.email) {
+    const u = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
+    userId = u?.id;
+  }
 
   try {
     const body = await request.json();
@@ -233,7 +246,7 @@ export async function POST(request: NextRequest) {
         type: (type as SchoolEventType) ?? "EVENT",
         color: color ?? "#059669",
         schoolId,
-        createdById: session.user.id,
+        createdById: userId ?? undefined,
       },
     });
 
