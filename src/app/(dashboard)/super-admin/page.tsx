@@ -15,18 +15,23 @@ export const metadata = { title: "Super Admin Dashboard" };
 function greet(name: string | null): string {
   const h = new Date().getHours();
   const t = h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
-  const fn = name?.split(" ")[0] ?? null;
+  const fn = name ? name.split(" ")[0] : null;
   return `Good ${t}${fn ? `, ${fn}` : ""}`;
 }
 
-function relTime(dateInput: Date | string): string {
-  const diff = Date.now() - new Date(dateInput).getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+function relTime(dateInput: Date | string | null | undefined): string {
+  if (!dateInput) return "recently";
+  try {
+    const diff = Date.now() - new Date(dateInput).getTime();
+    const m = Math.floor(diff / 60_000);
+    if (m < 1) return "just now";
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  } catch {
+    return "recently";
+  }
 }
 
 export default async function SuperAdminDashboard() {
@@ -35,77 +40,101 @@ export default async function SuperAdminDashboard() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [
-    schoolsByStatus,
-    totalUsers,
-    todayLogs,
-    recentSchoolsRaw,
-    recentAuditRaw,
-  ] = await Promise.all([
-    // School counts grouped by status
-    prisma.school.groupBy({
-      by: ["status"],
-      _count: { _all: true },
-    }),
-    // Non super-admin users
-    prisma.user.count({
-      where: { role: { not: "SUPER_ADMIN" } },
-    }),
-    // Today's platform activity
-    prisma.auditLog.count({
-      where: { createdAt: { gte: today } },
-    }),
-    // Recent schools with user count
-    prisma.school.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 6,
+  let totalSchools = 0;
+  let activeSchools = 0;
+  let suspendedCount = 0;
+  let totalUsers = 0;
+  let todayLogs = 0;
+  let recentSchools: Array<{
+    id: string;
+    name: string;
+    status: string;
+    userCount: number;
+    timeAgo: string;
+  }> = [];
+  let recentAudit: Array<{
+    id: string;
+    action: string;
+    entity: string;
+    entityName: string | null;
+    userName: string;
+    schoolName: string;
+    timeAgo: string;
+  }> = [];
+
+  try {
+    // 1. Fetch schools safely
+    const allSchools = await prisma.school.findMany({
       select: {
         id: true,
         name: true,
-        status: true,
         createdAt: true,
         _count: { select: { users: true } },
       },
-    }),
-    // Last 7 global audit entries
-    prisma.auditLog.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+
+    totalSchools = allSchools.length;
+
+    // Check school status safely
+    const schoolsWithStatus = await (prisma.school as any).findMany({
+      select: { id: true, status: true, isActive: true },
+    }).catch(() => []);
+
+    activeSchools = schoolsWithStatus.filter(
+      (s: any) => s.status === "ACTIVE" || s.isActive === true || (!s.status && s.isActive !== false)
+    ).length || totalSchools;
+
+    suspendedCount = schoolsWithStatus.filter(
+      (s: any) => s.status === "SUSPENDED" || s.isActive === false
+    ).length;
+
+    recentSchools = allSchools.slice(0, 6).map((s: any) => {
+      const match = schoolsWithStatus.find((st: any) => st.id === s.id);
+      return {
+        id: s.id,
+        name: s.name ?? "School",
+        status: match?.status ?? (match?.isActive === false ? "SUSPENDED" : "ACTIVE"),
+        userCount: s._count?.users ?? 0,
+        timeAgo: relTime(s.createdAt),
+      };
+    });
+  } catch (err) {
+    console.error("[DASHBOARD_SCHOOLS_ERROR]", err);
+  }
+
+  try {
+    // 2. Fetch Users safely
+    totalUsers = await prisma.user.count({
+      where: { role: { not: "SUPER_ADMIN" } },
+    });
+  } catch (err) {
+    console.error("[DASHBOARD_USERS_ERROR]", err);
+  }
+
+  try {
+    // 3. Fetch Audit logs safely
+    todayLogs = await prisma.auditLog.count({
+      where: { createdAt: { gte: today } },
+    });
+
+    const rawAudit = await prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
       take: 7,
-      select: {
-        id: true,
-        action: true,
-        entity: true,
-        entityName: true,
-        userName: true,
-        userRole: true,
-        schoolName: true,
-        createdAt: true,
-      },
-    }),
-  ]);
+    });
 
-  const totalSchools = schoolsByStatus.reduce((s, g) => s + (g._count?._all ?? 0), 0);
-  const activeSchools = schoolsByStatus.find((g) => g.status === "ACTIVE")?._count?._all ?? 0;
-  const suspendedCount = schoolsByStatus.find((g) => g.status === "SUSPENDED")?._count?._all ?? 0;
-
-  // Plain JSON serialization to avoid React Error #441
-  const recentSchools = recentSchoolsRaw.map((s) => ({
-    id: s.id,
-    name: s.name,
-    status: s.status,
-    userCount: s._count?.users ?? 0,
-    timeAgo: relTime(s.createdAt),
-  }));
-
-  const recentAudit = recentAuditRaw.map((log) => ({
-    id: log.id,
-    action: log.action,
-    entity: log.entity,
-    entityName: log.entityName,
-    userName: log.userName ?? "User",
-    schoolName: log.schoolName ?? "Platform",
-    timeAgo: relTime(log.createdAt),
-  }));
+    recentAudit = rawAudit.map((log: any) => ({
+      id: log.id,
+      action: String(log.action || "Action"),
+      entity: String(log.entity || "System"),
+      entityName: log.entityName ? String(log.entityName) : null,
+      userName: log.userName ? String(log.userName) : "User",
+      schoolName: log.schoolName ? String(log.schoolName) : "Platform",
+      timeAgo: relTime(log.createdAt),
+    }));
+  } catch (err) {
+    console.error("[DASHBOARD_AUDIT_ERROR]", err);
+  }
 
   const STATUS_STYLE: Record<string, string> = {
     ACTIVE: "bg-green-100 text-green-700",
@@ -119,7 +148,7 @@ export default async function SuperAdminDashboard() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {greet(user?.name ?? "User")}
+            {greet(user?.name ?? "Super Admin")}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5" />
@@ -136,9 +165,8 @@ export default async function SuperAdminDashboard() {
         </p>
       </div>
 
-      {/* ── Stat cards ───────────────────────────────────────── */}
+      {/* ── Stat Cards ───────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1 */}
         <Link
           href="/super-admin/schools"
           className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-gray-200 hover:shadow-md"
@@ -159,7 +187,6 @@ export default async function SuperAdminDashboard() {
           </div>
         </Link>
 
-        {/* Card 2 */}
         <Link
           href="/super-admin/schools"
           className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-gray-200 hover:shadow-md"
@@ -180,7 +207,6 @@ export default async function SuperAdminDashboard() {
           </div>
         </Link>
 
-        {/* Card 3 */}
         <Link
           href="/super-admin/users"
           className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-gray-200 hover:shadow-md"
@@ -203,7 +229,6 @@ export default async function SuperAdminDashboard() {
           </div>
         </Link>
 
-        {/* Card 4 */}
         <Link
           href="/super-admin/audit-logs"
           className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-gray-200 hover:shadow-md"
@@ -229,9 +254,9 @@ export default async function SuperAdminDashboard() {
         </Link>
       </div>
 
-      {/* ── Two column ───────────────────────────────────────── */}
+      {/* ── Lists ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent schools */}
+        {/* Recent Schools */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <p className="text-sm font-bold text-gray-900">Recent Schools</p>
@@ -245,7 +270,7 @@ export default async function SuperAdminDashboard() {
           <ul className="divide-y divide-gray-50">
             {recentSchools.length === 0 ? (
               <li className="px-5 py-10 text-center text-sm text-gray-400">
-                No schools yet
+                No schools found
               </li>
             ) : (
               recentSchools.map((school) => (
@@ -277,7 +302,7 @@ export default async function SuperAdminDashboard() {
           </ul>
         </div>
 
-        {/* Recent activity */}
+        {/* Recent Activity */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <p className="text-sm font-bold text-gray-900">Recent Activity</p>
@@ -304,7 +329,7 @@ export default async function SuperAdminDashboard() {
                       {log.userName}
                       <span className="font-normal text-gray-500">
                         {" "}
-                        {log.action ? log.action.toLowerCase().replace(/_/g, " ") : "action"}{" "}
+                        {log.action.toLowerCase().replace(/_/g, " ")}{" "}
                       </span>
                       {log.entityName && (
                         <span className="font-medium">{log.entityName}</span>
