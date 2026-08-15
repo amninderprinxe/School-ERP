@@ -1,17 +1,14 @@
-import { requireRole }  from "@/lib/session";
-import { prisma }       from "@/lib/db";
-import Link             from "next/link";
-import { StatCard }     from "@/components/dashboard/stat-card";
+import { requireRole } from "@/lib/session";
+import { prisma } from "@/lib/db";
+import Link from "next/link";
 import {
   Building2,
   Users,
   ShieldCheck,
   Activity,
   CheckCircle2,
-  XCircle,
-  PauseCircle,
   Globe,
-}                       from "lucide-react";
+} from "lucide-react";
 
 export const metadata = { title: "Super Admin Dashboard" };
 
@@ -24,11 +21,11 @@ function greet(name: string | null): string {
 
 function relTime(d: Date): string {
   const diff = Date.now() - new Date(d).getTime();
-  const m    = Math.floor(diff / 60_000);
-  if (m < 1)   return "just now";
-  if (m < 60)  return `${m}m ago`;
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24)  return `${h}h ago`;
+  if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
 }
 
@@ -47,8 +44,8 @@ export default async function SuperAdminDashboard() {
   ] = await Promise.all([
     // School counts grouped by status
     prisma.school.groupBy({
-      by:      ["status"],
-      _count:  { _all: true },
+      by: ["status"],
+      _count: { _all: true },
     }),
     // Non super-admin users
     prisma.user.count({
@@ -61,50 +58,49 @@ export default async function SuperAdminDashboard() {
     // Recent schools with user count
     prisma.school.findMany({
       orderBy: { createdAt: "desc" },
-      take:    6,
+      take: 6,
       select: {
-        id:        true,
-        name:      true,
-        status:    true,
+        id: true,
+        name: true,
+        status: true,
         createdAt: true,
-        _count:    { select: { users: true } },
+        _count: { select: { users: true } },
       },
     }),
     // Last 7 global audit entries
     prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
-      take:    7,
+      take: 7,
       select: {
-        id:         true,
-        action:     true,
-        entity:     true,
+        id: true,
+        action: true,
+        entity: true,
         entityName: true,
-        userName:   true,
-        userRole:   true,
+        userName: true,
+        userRole: true,
         schoolName: true,
-        createdAt:  true,
+        createdAt: true,
       },
     }),
   ]);
 
-  const totalSchools  = schoolsByStatus.reduce((s, g) => s + g._count._all, 0);
+  const totalSchools = schoolsByStatus.reduce((s, g) => s + g._count._all, 0);
   const activeSchools = schoolsByStatus.find((g) => g.status === "ACTIVE")?._count._all ?? 0;
   const suspendedCount = schoolsByStatus.find((g) => g.status === "SUSPENDED")?._count._all ?? 0;
 
   const STATUS_STYLE: Record<string, string> = {
-    ACTIVE:    "bg-green-100 text-green-700",
-    INACTIVE:  "bg-gray-100  text-gray-600",
-    SUSPENDED: "bg-red-100   text-red-700",
+    ACTIVE: "bg-green-100 text-green-700",
+    INACTIVE: "bg-gray-100 text-gray-600",
+    SUSPENDED: "bg-red-100 text-red-700",
   };
 
   return (
     <div className="space-y-6">
-
       {/* ── Greeting ─────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {greet(user.name?? "User")}
+            {greet(user.name ?? "User")}
           </h1>
           <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5" />
@@ -113,56 +109,112 @@ export default async function SuperAdminDashboard() {
         </div>
         <p className="text-sm text-gray-400">
           {new Date().toLocaleDateString("en-IN", {
-            weekday: "long", day: "numeric",
-            month: "long", year: "numeric",
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
           })}
         </p>
       </div>
 
-      {/* ── Stat cards ───────────────────────────────────────── */}
+      {/* ── Stat cards (Direct JSX to avoid serialization crash) ─ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Schools"
-          value={totalSchools}
-          description={`${activeSchools} active · ${suspendedCount} suspended`}
-          icon={Building2}
+        {/* Card 1 */}
+        <Link
           href="/super-admin/schools"
-          color="blue"
-        />
-        <StatCard
-          title="Active Schools"
-          value={activeSchools}
-          description={`${Math.round((activeSchools / Math.max(1, totalSchools)) * 100)}% of all schools`}
-          icon={CheckCircle2}
+          className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-gray-200 hover:shadow-md"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Total Schools
+            </span>
+            <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
+              <Building2 className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-2xl font-bold text-gray-900">{totalSchools}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {activeSchools} active · {suspendedCount} suspended
+            </p>
+          </div>
+        </Link>
+
+        {/* Card 2 */}
+        <Link
           href="/super-admin/schools"
-          color="green"
-        />
-        <StatCard
-          title="Total Users"
-          value={totalUsers.toLocaleString("en-IN")}
-          description="Students, teachers, parents, admins"
-          icon={Users}
+          className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-gray-200 hover:shadow-md"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Active Schools
+            </span>
+            <div className="rounded-lg bg-green-50 p-2 text-green-600">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-2xl font-bold text-gray-900">{activeSchools}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {Math.round((activeSchools / Math.max(1, totalSchools)) * 100)}% of all schools
+            </p>
+          </div>
+        </Link>
+
+        {/* Card 3 */}
+        <Link
           href="/super-admin/users"
-          color="indigo"
-        />
-        <StatCard
-          title="Activity Today"
-          value={todayLogs}
-          description="Platform-wide actions logged"
-          icon={Activity}
+          className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-gray-200 hover:shadow-md"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Total Users
+            </span>
+            <div className="rounded-lg bg-indigo-50 p-2 text-indigo-600">
+              <Users className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-2xl font-bold text-gray-900">
+              {totalUsers.toLocaleString("en-IN")}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Students, teachers, parents, admins
+            </p>
+          </div>
+        </Link>
+
+        {/* Card 4 */}
+        <Link
           href="/super-admin/audit-logs"
-          color={todayLogs > 50 ? "amber" : "gray"}
-        />
+          className="group block rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all hover:border-gray-200 hover:shadow-md"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Activity Today
+            </span>
+            <div
+              className={`rounded-lg p-2 ${
+                todayLogs > 50 ? "bg-amber-50 text-amber-600" : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              <Activity className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-2xl font-bold text-gray-900">{todayLogs}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Platform-wide actions logged
+            </p>
+          </div>
+        </Link>
       </div>
 
       {/* ── Two column ───────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
         {/* Recent schools */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm
-          overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4
-            border-b border-gray-100">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <p className="text-sm font-bold text-gray-900">Recent Schools</p>
             <Link
               href="/super-admin/schools"
@@ -176,36 +228,40 @@ export default async function SuperAdminDashboard() {
               <li className="px-5 py-10 text-center text-sm text-gray-400">
                 No schools yet
               </li>
-            ) : recentSchools.map((school) => (
-              <li key={school.id} className="flex items-center gap-4 px-5 py-3.5
-                hover:bg-gray-50/50 transition-colors">
-                <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center
-                  justify-center shrink-0">
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {school.name}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {school._count.users} user{school._count.users !== 1 ? "s" : ""}
-                    · {relTime(school.createdAt)}
-                  </p>
-                </div>
-                <span className={`px-2 py-0.5 text-[10px] font-bold
-                  rounded-full shrink-0 ${STATUS_STYLE[school.status] ?? ""}`}>
-                  {school.status}
-                </span>
-              </li>
-            ))}
+            ) : (
+              recentSchools.map((school) => (
+                <li
+                  key={school.id}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/50 transition-colors"
+                >
+                  <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {school.name}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {school._count.users} user{school._count.users !== 1 ? "s" : ""} ·{" "}
+                      {relTime(school.createdAt)}
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-full shrink-0 ${
+                      STATUS_STYLE[school.status] ?? "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {school.status}
+                  </span>
+                </li>
+              ))
+            )}
           </ul>
         </div>
 
         {/* Recent activity */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm
-          overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4
-            border-b border-gray-100">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <p className="text-sm font-bold text-gray-900">Recent Activity</p>
             <Link
               href="/super-admin/audit-logs"
@@ -219,32 +275,33 @@ export default async function SuperAdminDashboard() {
               <li className="px-5 py-10 text-center text-sm text-gray-400">
                 No activity yet
               </li>
-            ) : recentAudit.map((log) => (
-              <li key={log.id} className="px-5 py-3 flex items-start gap-3">
-                <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center
-                  justify-center shrink-0 mt-0.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-gray-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-gray-900 leading-snug">
-                    {log.userName}
-                    <span className="font-normal text-gray-500">
-                      {" "}{log.action.toLowerCase().replace(/_/g, " ")}{" "}
-                    </span>
-                    {log.entityName && (
-                      <span className="font-medium">{log.entityName}</span>
-                    )}
-                  </p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">
-                    {log.schoolName ?? "Platform"} · {relTime(log.createdAt)}
-                  </p>
-                </div>
-              </li>
-            ))}
+            ) : (
+              recentAudit.map((log) => (
+                <li key={log.id} className="px-5 py-3 flex items-start gap-3">
+                  <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-gray-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 leading-snug">
+                      {log.userName ?? "User"}
+                      <span className="font-normal text-gray-500">
+                        {" "}
+                        {log.action ? log.action.toLowerCase().replace(/_/g, " ") : "action"}{" "}
+                      </span>
+                      {log.entityName && (
+                        <span className="font-medium">{log.entityName}</span>
+                      )}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      {log.schoolName ?? "Platform"} · {relTime(log.createdAt)}
+                    </p>
+                  </div>
+                </li>
+              ))
+            )}
           </ul>
         </div>
       </div>
-
     </div>
   );
 }
