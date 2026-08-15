@@ -1,15 +1,10 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
-import {
-  Pencil,
-  Plus,
-  Trash2,
-  UserRound,
-  Users,
-} from "lucide-react";
+import { Plus, UserRound, Users } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { TeacherTableClient } from "@/components/teacher/teacher-table-client";
 
 export const metadata = {
   title: "Teachers | Campus-X",
@@ -59,13 +54,13 @@ export default async function TeachersPage() {
       userId: true,
       employeeCode: true,
       qualification: true,
-      // gender: true,
-
+      gender: true,
       user: {
         select: {
           id: true,
           name: true,
           email: true,
+          gender: true,
           isActive: true,
           schoolId: true,
         },
@@ -147,6 +142,17 @@ export default async function TeachersPage() {
     revalidatePath("/school-admin");
   }
 
+  const clientTeachers = teachers.map((t) => ({
+    id: t.id,
+    userId: t.userId,
+    name: t.user.name ?? "Teacher",
+    email: t.user.email,
+    gender: (t as any).gender ?? t.user.gender ?? null,
+    employeeCode: t.employeeCode,
+    qualification: t.qualification,
+    isActive: t.user.isActive,
+  }));
+
   return (
     <div className="space-y-6">
       {/* Page heading */}
@@ -168,138 +174,12 @@ export default async function TeachersPage() {
         </Link>
       </div>
 
-      {/* Teachers list */}
+      {/* Teachers client table with live search & filters */}
       {teachers.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
-              <thead className="border-b border-gray-200 bg-gray-50">
-                <tr>
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Name
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Email
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Gender
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Emp. Code
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Qualification
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Status
-                  </th>
-
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {teachers.map((teacher) => {
-                  const teacherName = teacher.user.name?.trim() || "Teacher";
-
-                  const initials = getInitials(teacherName);
-
-                  return (
-                    <tr
-                      key={teacher.id}
-                      className="transition-colors hover:bg-gray-50/70"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-50 text-sm font-semibold text-purple-600">
-                            {initials}
-                          </div>
-
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-gray-900">
-                              {teacherName}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <p className="text-sm text-gray-500">
-                          {teacher.user.email}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
-                          {/* {formatGender(teacher.gender)} */}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <p className="font-mono text-sm text-gray-600">
-                          {teacher.employeeCode || "—"}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <p className="text-sm text-gray-500">
-                          {teacher.qualification?.trim() || "—"}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={
-                            teacher.user.isActive
-                              ? "inline-flex rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700"
-                              : "inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700"
-                          }
-                        >
-                          {teacher.user.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link
-                            href={`/school-admin/teachers/${teacher.id}/edit`}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            Edit
-                          </Link>
-
-                          <form action={deleteTeacher}>
-                            <input
-                              type="hidden"
-                              name="teacherProfileId"
-                              value={teacher.id}
-                            />
-
-                            <button
-                              type="submit"
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Delete
-                            </button>
-                          </form>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <TeacherTableClient
+          teachers={clientTeachers}
+          deleteAction={deleteTeacher}
+        />
       ) : (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50">
@@ -326,24 +206,4 @@ export default async function TeachersPage() {
       )}
     </div>
   );
-}
-
-function getInitials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-}
-
-function formatGender(gender: string | null) {
-  if (!gender) {
-    return "Not specified";
-  }
-
-  return gender
-    .toLowerCase()
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
