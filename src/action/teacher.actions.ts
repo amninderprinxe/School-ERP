@@ -306,11 +306,13 @@ export async function deleteTeacher(
       };
     }
 
+    // Supports deleting by user.id or teacherProfile.id
     const existing = await prisma.user.findFirst({
       where: {
-        id,
-        schoolId,
-        role: "TEACHER",
+        OR: [
+          { id, schoolId, role: "TEACHER" },
+          { teacherProfile: { id }, schoolId, role: "TEACHER" },
+        ],
       },
       select: {
         id: true,
@@ -354,6 +356,8 @@ export async function deleteTeacher(
     });
 
     revalidatePath(REVALIDATE);
+    revalidatePath("/school-admin/sections");
+    revalidatePath("/school-admin");
 
     return {
       success: true,
