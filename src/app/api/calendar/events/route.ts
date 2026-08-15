@@ -36,11 +36,19 @@ function birthdayInRange(dob: Date, start: Date, end: Date): Date[] {
   return hits;
 }
 
-function toISO(d: Date): string {
+// ── Timezone-Safe Local YYYY-MM-DD Formatter ──────────────────────
+function toISO(d: Date | string): string {
   try {
+    if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      return d;
+    }
     const dateObj = new Date(d);
     if (isNaN(dateObj.getTime())) return new Date().toISOString().split("T")[0]!;
-    return dateObj.toISOString().split("T")[0]!;
+
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   } catch {
     return new Date().toISOString().split("T")[0]!;
   }
@@ -74,12 +82,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([]);
     }
 
+    // Widen filter boundaries by 1 day buffer to handle timezone offsets cleanly
+    const safeStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
+    const safeEnd = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+
     const role = session.user.role;
     const userId = session.user.id;
     const schoolId = session.user.schoolId ?? "";
-    const typeFilter = typesStr ? typesStr.split(",") : null;
+    const typeFilter = typesStr ? typesStr.toLowerCase().split(",") : null;
 
-    const want = (t: string) => !typeFilter || typeFilter.includes(t);
+    const want = (t: string) =>
+      !typeFilter ||
+      typeFilter.includes(t.toLowerCase()) ||
+      (t === "school_event" && (typeFilter.includes("event") || typeFilter.includes("school_event")));
+
     const events: Record<string, unknown>[] = [];
 
     if (!schoolId) {
@@ -100,82 +116,96 @@ export async function GET(request: NextRequest) {
       ] = await Promise.all([
         // Exams
         want("exam")
-          ? prisma.exam.findMany({
-              where: {
-                schoolId,
-                OR: [
-                  { startDate: { gte: start, lte: end } },
-                  { endDate: { gte: start, lte: end } },
-                ],
-              },
-              include: { class: { select: { name: true } } },
-            }).catch(() => [])
+          ? prisma.exam
+              .findMany({
+                where: {
+                  schoolId,
+                  OR: [
+                    { startDate: { gte: safeStart, lte: safeEnd } },
+                    { endDate: { gte: safeStart, lte: safeEnd } },
+                  ],
+                },
+                include: { class: { select: { name: true } } },
+              })
+              .catch(() => [])
           : [],
 
         // PTM slots
         want("ptm")
-          ? prisma.ptmSlot.findMany({
-              where: { schoolId, date: { gte: start, lte: end } },
-              include: {
-                teacherProfile: { include: { user: { select: { name: true } } } },
-                booking: {
-                  include: {
-                    studentProfile: { include: { user: { select: { name: true } } } },
+          ? prisma.ptmSlot
+              .findMany({
+                where: { schoolId, date: { gte: safeStart, lte: safeEnd } },
+                include: {
+                  teacherProfile: { include: { user: { select: { name: true } } } },
+                  booking: {
+                    include: {
+                      studentProfile: { include: { user: { select: { name: true } } } },
+                    },
                   },
                 },
-              },
-            }).catch(() => [])
+              })
+              .catch(() => [])
           : [],
 
         // Holidays
         want("holiday")
-          ? prisma.holiday.findMany({
-              where: { schoolId, date: { gte: start, lte: end } },
-            }).catch(() => [])
+          ? prisma.holiday
+              .findMany({
+                where: { schoolId, date: { gte: safeStart, lte: safeEnd } },
+              })
+              .catch(() => [])
           : [],
 
         // Fee due dates
         want("fee")
-          ? prisma.feeStructure.findMany({
-              where: {
-                schoolId,
-                dueDate: { gte: start, lte: end },
-              },
-              include: { feeCategory: { select: { name: true } } },
-            }).catch(() => [])
+          ? prisma.feeStructure
+              .findMany({
+                where: {
+                  schoolId,
+                  dueDate: { gte: safeStart, lte: safeEnd },
+                },
+                include: { feeCategory: { select: { name: true } } },
+              })
+              .catch(() => [])
           : [],
 
         // School events
         want("school_event")
-          ? prisma.schoolEvent.findMany({
-              where: {
-                schoolId,
-                OR: [
-                  { startDate: { gte: start, lte: end } },
-                  { AND: [{ startDate: { lte: start } }, { endDate: { gte: end } }] },
-                  { AND: [{ startDate: { lte: end } }, { endDate: { gte: start } }] },
-                ],
-              },
-              include: { createdBy: { select: { name: true } } },
-            }).catch(() => [])
+          ? prisma.schoolEvent
+              .findMany({
+                where: {
+                  schoolId,
+                  OR: [
+                    { startDate: { gte: safeStart, lte: safeEnd } },
+                    { AND: [{ startDate: { lte: safeStart } }, { endDate: { gte: safeEnd } }] },
+                    { AND: [{ startDate: { lte: safeEnd } }, { endDate: { gte: safeStart } }] },
+                  ],
+                },
+                include: { createdBy: { select: { name: true } } },
+              })
+              .catch(() => [])
           : [],
 
         // Student birthdays
         want("birthday")
-          ? prisma.studentProfile.findMany({
-              where: { user: { schoolId, isActive: true }, dateOfBirth: { not: null } },
-              include: {
-                user: { select: { name: true } },
-                section: { include: { class: { select: { name: true } } } },
-              },
-            }).catch(() => [])
+          ? prisma.studentProfile
+              .findMany({
+                where: { user: { schoolId, isActive: true }, dateOfBirth: { not: null } },
+                include: {
+                  user: { select: { name: true } },
+                  section: { include: { class: { select: { name: true } } } },
+                },
+              })
+              .catch(() => [])
           : [],
 
         // Announcements
         want("announcement")
-          ? prisma.announcement.findMany({
-              where: { schoolId, createdAt: { gte: start, lte: end } },
-            }).catch(() => [])
+          ? prisma.announcement
+              .findMany({
+                where: { schoolId, createdAt: { gte: safeStart, lte: safeEnd } },
+              })
+              .catch(() => [])
           : [],
       ]);
 
@@ -352,7 +382,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(events);
   } catch (error) {
     console.error("[CALENDAR_GET_ERROR]", error);
-    // Return empty array on error so frontend calendar doesn't crash
     return NextResponse.json([]);
   }
 }
@@ -377,12 +406,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title and start date required" }, { status: 400 });
     }
 
+    // Cleanly construct Date objects without UTC shift
+    const parsedStart = new Date(startDate.includes("T") ? startDate : `${startDate}T00:00:00`);
+    const parsedEnd = endDate ? new Date(endDate.includes("T") ? endDate : `${endDate}T23:59:59`) : null;
+
     const event = await prisma.schoolEvent.create({
       data: {
         title: title.trim(),
         description: description?.trim() || null,
-        startDate: new Date(startDate),
-        endDate: endDate ? new Date(endDate) : null,
+        startDate: parsedStart,
+        endDate: parsedEnd,
         allDay: allDay ?? true,
         startTime: startTime || null,
         endTime: endTime || null,
