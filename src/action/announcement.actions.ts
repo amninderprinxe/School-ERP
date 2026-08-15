@@ -34,11 +34,15 @@ async function safelyLogAction(data: Parameters<typeof logAction>[0]) {
 }
 
 function revalidateAnnouncementPages() {
-  revalidatePath(REVALIDATE);
-  revalidatePath("/school-admin");
-  revalidatePath("/teacher");
-  revalidatePath("/student");
-  revalidatePath("/notifications");
+  try {
+    revalidatePath(REVALIDATE);
+    revalidatePath("/school-admin");
+    revalidatePath("/teacher");
+    revalidatePath("/student");
+    revalidatePath("/notifications");
+  } catch (err) {
+    console.error("[revalidate-announcement-pages]", err);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -75,6 +79,7 @@ export async function createAnnouncement(
     const cleanTitle = parsed.data.title.trim();
     const cleanContent = parsed.data.content.trim();
 
+    // 1. Create Announcement in Database
     const createdAnnouncement = await prisma.announcement.create({
       data: {
         title: cleanTitle,
@@ -88,22 +93,31 @@ export async function createAnnouncement(
       },
     });
 
-    // ── Dispatch single in-app notification to all school members ────
-    // Link is set to null so it opens the notification view modal directly
-    // without redirecting teachers or students to restricted admin routes.
-    void notifySchool(
-      schoolId,
-      {
-        userId: undefined, // no specific user
-        title: `Announcement: ${cleanTitle}`,
-        body: cleanContent.length > 140 ? cleanContent.slice(0, 137) + "…" : cleanContent,
-        link: null,
-        type: NOTIFICATION_TYPES.ANNOUNCEMENT,
-      },
-      user.id, // exclude author
-    );
+    // 2. Dispatch in-app notifications safely
+    void (async () => {
+      try {
+        if (typeof notifySchool === "function") {
+          await notifySchool(
+            schoolId,
+            {
+              userId: undefined,
+              title: `Announcement: ${cleanTitle}`,
+              body:
+                cleanContent.length > 140
+                  ? cleanContent.slice(0, 137) + "…"
+                  : cleanContent,
+              link: null,
+              type: NOTIFICATION_TYPES?.ANNOUNCEMENT ?? "ANNOUNCEMENT",
+            },
+            user.id, // exclude author
+          );
+        }
+      } catch (notifyErr) {
+        console.error("[notifySchool Error]:", notifyErr);
+      }
+    })();
 
-    // ── Send batch emails to active users with registered emails ─────
+    // 3. Dispatch batch emails safely in background
     void (async () => {
       try {
         const [school, users] = await Promise.all([
@@ -124,21 +138,27 @@ export async function createAnnouncement(
         ]);
 
         const validRecipients = users
-          .filter((u): u is { email: string; name: string } => Boolean(u.email?.trim()))
+          .filter((u): u is { email: string; name: string } =>
+            Boolean(u.email && u.email.trim().length > 0),
+          )
           .map((u) => ({ email: u.email!.trim(), name: u.name }));
 
-        if (validRecipients.length > 0) {
+        if (validRecipients.length > 0 && typeof sendEmail === "function") {
           const publishedAt = new Date().toLocaleDateString("en-IN", {
             day: "numeric",
             month: "long",
             year: "numeric",
+            timeZone: "Asia/Kolkata",
           });
 
           for (const recipient of validRecipients) {
             try {
-              sendEmail({
+              await sendEmail({
                 to: recipient.email,
-                subject: announcementEmailSubject(school?.name ?? "School", cleanTitle),
+                subject: announcementEmailSubject(
+                  school?.name ?? "School",
+                  cleanTitle,
+                ),
                 html: announcementEmail({
                   schoolName: school?.name ?? "School",
                   recipientName: recipient.name,
@@ -149,7 +169,10 @@ export async function createAnnouncement(
                 }),
               });
             } catch (err) {
-              console.error(`[announcement email] Failed for ${recipient.email}:`, err);
+              console.error(
+                `[announcement email] Failed for ${recipient.email}:`,
+                err,
+              );
             }
           }
         }
@@ -158,6 +181,7 @@ export async function createAnnouncement(
       }
     })();
 
+    // 4. Safely Log Audit Action
     await safelyLogAction({
       userId: user.id,
       userRole: user.role,
@@ -183,7 +207,10 @@ export async function createAnnouncement(
 
     return {
       success: false,
-      error: "Failed to create announcement. Please try again.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to create announcement. Please try again.",
     };
   }
 }
@@ -284,7 +311,10 @@ export async function updateAnnouncement(
 
     return {
       success: false,
-      error: "Failed to update announcement.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to update announcement.",
     };
   }
 }
@@ -355,7 +385,10 @@ export async function deleteAnnouncement(id: string): Promise<ActionResult> {
 
     return {
       success: false,
-      error: "Failed to delete announcement.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to delete announcement.",
     };
   }
 }
