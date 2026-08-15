@@ -63,57 +63,41 @@ export default async function SuperAdminDashboard() {
   }> = [];
 
   try {
-    // 1. Fetch schools safely
-    const allSchools = await prisma.school.findMany({
+    const schools = await prisma.school.findMany({
       select: {
         id: true,
         name: true,
+        status: true,
         createdAt: true,
         _count: { select: { users: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    totalSchools = allSchools.length;
+    totalSchools = schools.length;
+    activeSchools = schools.filter((s) => s.status === "ACTIVE").length;
+    suspendedCount = schools.filter((s) => s.status === "SUSPENDED").length;
 
-    // Check school status safely
-    const schoolsWithStatus = await (prisma.school as any).findMany({
-      select: { id: true, status: true, isActive: true },
-    }).catch(() => []);
-
-    activeSchools = schoolsWithStatus.filter(
-      (s: any) => s.status === "ACTIVE" || s.isActive === true || (!s.status && s.isActive !== false)
-    ).length || totalSchools;
-
-    suspendedCount = schoolsWithStatus.filter(
-      (s: any) => s.status === "SUSPENDED" || s.isActive === false
-    ).length;
-
-    recentSchools = allSchools.slice(0, 6).map((s: any) => {
-      const match = schoolsWithStatus.find((st: any) => st.id === s.id);
-      return {
-        id: s.id,
-        name: s.name ?? "School",
-        status: match?.status ?? (match?.isActive === false ? "SUSPENDED" : "ACTIVE"),
-        userCount: s._count?.users ?? 0,
-        timeAgo: relTime(s.createdAt),
-      };
-    });
+    recentSchools = schools.slice(0, 6).map((s) => ({
+      id: s.id,
+      name: s.name ?? "School",
+      status: s.status ?? "ACTIVE",
+      userCount: s._count?.users ?? 0,
+      timeAgo: relTime(s.createdAt),
+    }));
   } catch (err) {
-    console.error("[DASHBOARD_SCHOOLS_ERROR]", err);
+    console.error("[DASHBOARD_SCHOOLS_FETCH]", err);
   }
 
   try {
-    // 2. Fetch Users safely
     totalUsers = await prisma.user.count({
       where: { role: { not: "SUPER_ADMIN" } },
     });
   } catch (err) {
-    console.error("[DASHBOARD_USERS_ERROR]", err);
+    console.error("[DASHBOARD_USERS_FETCH]", err);
   }
 
   try {
-    // 3. Fetch Audit logs safely
     todayLogs = await prisma.auditLog.count({
       where: { createdAt: { gte: today } },
     });
@@ -121,9 +105,18 @@ export default async function SuperAdminDashboard() {
     const rawAudit = await prisma.auditLog.findMany({
       orderBy: { createdAt: "desc" },
       take: 7,
+      select: {
+        id: true,
+        action: true,
+        entity: true,
+        entityName: true,
+        userName: true,
+        schoolName: true,
+        createdAt: true,
+      },
     });
 
-    recentAudit = rawAudit.map((log: any) => ({
+    recentAudit = rawAudit.map((log) => ({
       id: log.id,
       action: String(log.action || "Action"),
       entity: String(log.entity || "System"),
@@ -133,7 +126,7 @@ export default async function SuperAdminDashboard() {
       timeAgo: relTime(log.createdAt),
     }));
   } catch (err) {
-    console.error("[DASHBOARD_AUDIT_ERROR]", err);
+    console.error("[DASHBOARD_AUDIT_FETCH]", err);
   }
 
   const STATUS_STYLE: Record<string, string> = {

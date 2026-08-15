@@ -23,12 +23,6 @@ export async function getCurrentSchoolId(): Promise<string | null> {
 
 /**
  * Enforces auth + role restriction + live active/suspended check.
- * Redirects to /login if unauthenticated or user inactive.
- * Redirects to /suspended if school is suspended.
- * Redirects to /unauthorized if role doesn't match.
- *
- * @example
- *   const user = await requireRole(["SCHOOL_ADMIN", "SUPER_ADMIN"]);
  */
 export async function requireRole(allowedRoles: Role[]) {
   const session = await auth();
@@ -37,55 +31,52 @@ export async function requireRole(allowedRoles: Role[]) {
     redirect("/login");
   }
 
-  // Live database check
-  const dbUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      isActive: true,
-      schoolId: true,
-      school: {
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          isActive: true,
-        },
-      },
-    },
-  });
-
-  if (!dbUser || !dbUser.isActive) {
-    redirect("/login?error=account_disabled");
+  // 1. Check user role first
+  const userRole = session.user.role;
+  if (!allowedRoles.includes(userRole)) {
+    redirect("/unauthorized");
   }
 
-  // SUPER_ADMIN ਨੂੰ ਛੱਡ ਕੇ ਬਾਕੀ ਸਾਰੇ ਸਕੂਲ ਯੂਜ਼ਰਾਂ ਲਈ ਸਸਪੈਂਡ ਸਟੇਟਸ ਲਾਗੂ ਕਰੋ
-  if (dbUser.role !== "SUPER_ADMIN") {
+  // 2. SUPER_ADMIN bypasses all school checks
+  if (userRole === "SUPER_ADMIN") {
+    return session.user;
+  }
+
+  // 3. For school users (ADMIN, TEACHER, STUDENT), verify school status safely
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true,
+        isActive: true,
+        schoolId: true,
+        school: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!dbUser || dbUser.isActive === false) {
+      redirect("/login?error=account_disabled");
+    }
+
     if (!dbUser.schoolId || !dbUser.school) {
       redirect("/login?error=no_school");
     }
 
-    const schoolStatus = (dbUser.school as any).status;
-    const isSchoolActive = (dbUser.school as any).isActive;
-
-    if (schoolStatus === "SUSPENDED" || isSchoolActive === false) {
+    if (dbUser.school.status === "SUSPENDED") {
       redirect("/suspended");
     }
+  } catch (err: any) {
+    // If redirect was triggered, rethrow it for Next.js
+    if (err?.digest?.startsWith("NEXT_REDIRECT")) {
+      throw err;
+    }
+    console.error("[REQUIRE_ROLE_ERROR]", err);
   }
 
-  if (!allowedRoles.includes(dbUser.role)) {
-    redirect("/unauthorized");
-  }
-
-  return {
-    ...session.user,
-    id: dbUser.id,
-    name: dbUser.name,
-    email: dbUser.email,
-    role: dbUser.role,
-    schoolId: dbUser.schoolId,
-  };
+  return session.user;
 }
