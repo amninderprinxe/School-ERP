@@ -73,6 +73,14 @@ interface Props {
   canCreate: boolean;
 }
 
+// ── Strict Local YYYY-MM-DD Formatter ────────────────────────────
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function CalendarClient({ role, canCreate }: Props) {
   const mountedRef = useRef(false);
 
@@ -83,7 +91,7 @@ export function CalendarClient({ role, canCreate }: Props) {
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [activeTypes, setActiveTypes] = useState(new Set(EVENT_TYPES.map((t) => t.id)));
-  
+
   const [events, setEvents] = useState<any[]>([]);
   const [clickedEvent, setClickedEvent] = useState<ClickedEvent | null>(null);
   const [addModalDate, setAddModalDate] = useState<string | null>(null);
@@ -96,18 +104,10 @@ export function CalendarClient({ role, canCreate }: Props) {
     };
   }, []);
 
-  // Calculate Date Ranges for Month
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  const firstDayOfMonth = new Date(year, month, 1);
-  const lastDayOfMonth = new Date(year, month + 1, 0);
-
-  // Range for API Fetching
-  const startDateStr = new Date(year, month, 1 - firstDayOfMonth.getDay()).toISOString();
-  const endDateStr = new Date(year, month + 1, 6 - lastDayOfMonth.getDay()).toISOString();
-
-  // Fetch Events API
+  // Fetch Events API with wider safe buffer & cache busting
   const loadEvents = useCallback(async () => {
     try {
       if (mountedRef.current) {
@@ -115,9 +115,19 @@ export function CalendarClient({ role, canCreate }: Props) {
         setError(null);
       }
 
-      const types = Array.from(activeTypes).join(",");
+      // Safe date bounds for entire month with margin
+      const startBuffer = new Date(year, month - 1, 1).toISOString();
+      const endBuffer = new Date(year, month + 2, 0).toISOString();
+
+      // Include all types + aliases (e.g. event for school_event)
+      const rawTypes = Array.from(activeTypes);
+      if (rawTypes.includes("school_event")) {
+        rawTypes.push("event", "EVENT", "SPORTS", "CULTURAL", "MEETING", "CELEBRATION", "LEAVE", "OTHER");
+      }
+      const types = rawTypes.join(",");
+
       const response = await fetch(
-        `/api/calendar/events?start=${startDateStr}&end=${endDateStr}&types=${types}`,
+        `/api/calendar/events?start=${encodeURIComponent(startBuffer)}&end=${encodeURIComponent(endBuffer)}&types=${encodeURIComponent(types)}&_t=${Date.now()}`,
         { cache: "no-store" }
       );
 
@@ -133,7 +143,7 @@ export function CalendarClient({ role, canCreate }: Props) {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [startDateStr, endDateStr, activeTypes]);
+  }, [year, month, activeTypes]);
 
   useEffect(() => {
     loadEvents();
@@ -155,11 +165,14 @@ export function CalendarClient({ role, canCreate }: Props) {
     });
   };
 
-  // Generate Calendar Days Grid
+  // Generate Calendar Days Grid (Standard 42 days / 6 weeks)
+  const firstDayOfMonth = new Date(year, month, 1);
+  const dayOfWeek = firstDayOfMonth.getDay(); // 0 = Sun, 1 = Mon ...
+  const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Align Monday as 0
+  const startGridDate = new Date(year, month, 1 - offset);
+
   const daysInMonth: Date[] = [];
-  const startGridDate = new Date(year, month, 1 - (firstDayOfMonth.getDay() === 0 ? 6 : firstDayOfMonth.getDay() - 1));
-  
-  for (let i = 0; i < 35; i++) {
+  for (let i = 0; i < 42; i++) {
     const day = new Date(startGridDate);
     day.setDate(startGridDate.getDate() + i);
     daysInMonth.push(day);
@@ -173,13 +186,13 @@ export function CalendarClient({ role, canCreate }: Props) {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
-            <button onClick={() => nav("prev")} className="p-2 rounded-xl hover:bg-gray-100">
+            <button onClick={() => nav("prev")} className="p-2 rounded-xl hover:bg-gray-100 transition">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <button onClick={() => nav("today")} className="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-50 text-blue-700">
+            <button onClick={() => nav("today")} className="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 transition">
               Today
             </button>
-            <button onClick={() => nav("next")} className="p-2 rounded-xl hover:bg-gray-100">
+            <button onClick={() => nav("next")} className="p-2 rounded-xl hover:bg-gray-100 transition">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -195,11 +208,11 @@ export function CalendarClient({ role, canCreate }: Props) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search events..."
-                className="pl-9 pr-3 py-2 rounded-xl bg-gray-100 text-sm outline-none w-[220px]"
+                className="pl-9 pr-3 py-2 rounded-xl bg-gray-100 text-sm outline-none w-[200px] focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
-            <button onClick={() => setShowFilters((p) => !p)} className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold">
+            <button onClick={() => setShowFilters((p) => !p)} className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold hover:bg-gray-50 transition">
               <Filter className="w-4 h-4" />
               Filters
             </button>
@@ -207,7 +220,7 @@ export function CalendarClient({ role, canCreate }: Props) {
             {canCreate && (
               <button
                 onClick={() => {
-                  setAddModalDate(new Date().toISOString().split("T")[0]);
+                  setAddModalDate(formatLocalDate(new Date()));
                   setAddModalOpen(true);
                 }}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
@@ -273,7 +286,7 @@ export function CalendarClient({ role, canCreate }: Props) {
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-600">
           <AlertTriangle className="w-5 h-5" />
           <span className="text-sm font-medium">{error}</span>
-          <button onClick={loadEvents} className="ml-auto">
+          <button onClick={loadEvents} className="ml-auto hover:rotate-180 transition-transform">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
@@ -291,16 +304,24 @@ export function CalendarClient({ role, canCreate }: Props) {
             {/* Month Grid */}
             <div className="grid grid-cols-7 gap-1 auto-rows-fr">
               {daysInMonth.map((day, idx) => {
-                const dateStr = day.toISOString().split("T")[0];
+                const dateStr = formatLocalDate(day);
                 const isCurrentMonth = day.getMonth() === month;
-                const isToday = day.toDateString() === new Date().toDateString();
+                const isToday = formatLocalDate(day) === formatLocalDate(new Date());
 
-                // Filter events for this day
+                // Robust Date Range Matcher (Pure YYYY-MM-DD strings comparison)
                 const dayEvents = events.filter((e) => {
                   if (!e.start) return false;
-                  const eDate = e.start.split("T")[0];
+                  const startPure = typeof e.start === "string" && e.start.includes("T")
+                    ? e.start.split("T")[0]
+                    : e.start;
+                  const endPure = e.end
+                    ? (typeof e.end === "string" && e.end.includes("T") ? e.end.split("T")[0] : e.end)
+                    : startPure;
+
+                  const isInsideRange = dateStr >= startPure && dateStr <= endPure;
                   const matchesSearch = !query || e.title?.toLowerCase().includes(query.toLowerCase());
-                  return eDate === dateStr && matchesSearch;
+
+                  return isInsideRange && matchesSearch;
                 });
 
                 return (
@@ -313,8 +334,8 @@ export function CalendarClient({ role, canCreate }: Props) {
                       }
                     }}
                     className={cn(
-                      "min-h-[100px] border border-gray-100 rounded-xl p-2 flex flex-col justify-between transition cursor-pointer hover:bg-gray-50",
-                      !isCurrentMonth && "opacity-30 bg-gray-50/50",
+                      "min-h-[105px] border border-gray-100 rounded-xl p-2 flex flex-col justify-between transition cursor-pointer hover:bg-gray-50/80",
+                      !isCurrentMonth && "opacity-35 bg-gray-50/40",
                       isToday && "bg-blue-50/40 border-blue-200"
                     )}
                   >
@@ -325,7 +346,7 @@ export function CalendarClient({ role, canCreate }: Props) {
                     </div>
 
                     {/* Events List for Day */}
-                    <div className="flex flex-col gap-1 mt-1 overflow-y-auto max-h-[80px]">
+                    <div className="flex flex-col gap-1 mt-1 overflow-y-auto max-h-[85px]">
                       {dayEvents.map((ev) => (
                         <div
                           key={ev.id}
@@ -333,8 +354,8 @@ export function CalendarClient({ role, canCreate }: Props) {
                             e.stopPropagation();
                             setClickedEvent(ev);
                           }}
-                          className="px-2 py-1 rounded text-[11px] font-semibold text-white truncate shadow-sm hover:opacity-90 transition"
-                          style={{ backgroundColor: ev.color || "#2563eb" }}
+                          className="px-2 py-1 rounded-md text-[11px] font-medium text-white truncate shadow-xs hover:opacity-90 transition"
+                          style={{ backgroundColor: ev.color || "#059669" }}
                         >
                           {ev.title}
                         </div>
@@ -352,9 +373,9 @@ export function CalendarClient({ role, canCreate }: Props) {
               <div className="text-center py-12 text-gray-400 text-sm">No events found</div>
             ) : (
               events.map((ev) => (
-                <div key={ev.id} className="py-3 flex items-center justify-between hover:bg-gray-50 px-2 rounded-lg">
+                <div key={ev.id} className="py-3 flex items-center justify-between hover:bg-gray-50 px-2 rounded-lg transition">
                   <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: ev.color || "#2563eb" }} />
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: ev.color || "#059669" }} />
                     <div>
                       <h4 className="text-sm font-semibold text-gray-900">{ev.title}</h4>
                       <p className="text-xs text-gray-400">{ev.start?.split("T")[0]}</p>
@@ -378,7 +399,10 @@ export function CalendarClient({ role, canCreate }: Props) {
         onSuccess={() => {
           setAddModalOpen(false);
           setAddModalDate(null);
-          loadEvents();
+          // Wait briefly for backend commit then re-fetch
+          setTimeout(() => {
+            loadEvents();
+          }, 300);
         }}
       />
     </div>
