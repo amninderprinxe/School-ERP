@@ -1,5 +1,6 @@
 import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { redirect } from "next/navigation";
 import {
   AlertTriangle,
   CreditCard,
@@ -17,27 +18,34 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function SuspendedPage() {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  // Only SCHOOL_ADMIN can view this renewal page
+  if (session.user.role !== "SCHOOL_ADMIN") {
+    redirect("/login?error=account_suspended");
+  }
+
   let schoolName = "Your Institution";
-  let userEmail = "";
+  const userEmail = session.user.email ?? "";
 
   try {
-    const session = await auth();
-    if (session?.user?.id) {
-      userEmail = session.user.email ?? "";
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: {
-          school: {
-            select: { name: true },
-          },
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        school: {
+          select: { name: true },
         },
-      });
-      if (user?.school?.name) {
-        schoolName = user.school.name;
-      }
+      },
+    });
+    if (user?.school?.name) {
+      schoolName = user.school.name;
     }
   } catch (error) {
-    console.error("[SUSPENDED_PAGE_SESSION_ERROR]", error);
+    console.error("[SUSPENDED_PAGE_ERROR]", error);
   }
 
   const encodedWhatsappMsg = encodeURIComponent(
@@ -114,7 +122,6 @@ export default async function SuspendedPage() {
         {/* Contact & Support Section */}
         <div className="border-t border-slate-100 pt-6 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* WhatsApp Quick Action */}
             <a
               href={`https://wa.me/919877731378?text=${encodedWhatsappMsg}`}
               target="_blank"
@@ -125,7 +132,6 @@ export default async function SuspendedPage() {
               WhatsApp: 98777-31378
             </a>
 
-            {/* Email Support */}
             <a
               href="mailto:amninder99155@gmail.com?subject=Campus-X%20Subscription%20Renewal"
               className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 font-semibold text-xs text-white transition-colors shadow-sm"

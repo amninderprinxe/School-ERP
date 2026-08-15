@@ -31,23 +31,23 @@ export async function requireRole(allowedRoles: Role[]) {
     redirect("/login");
   }
 
-  // 1. Check user role first
   const userRole = session.user.role;
   if (!allowedRoles.includes(userRole)) {
     redirect("/unauthorized");
   }
 
-  // 2. SUPER_ADMIN bypasses all school checks
+  // SUPER_ADMIN has platform-wide unrestricted access
   if (userRole === "SUPER_ADMIN") {
     return session.user;
   }
 
-  // 3. For school users (ADMIN, TEACHER, STUDENT), verify school status safely
+  // For school-level roles: verify user & school status
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
         id: true,
+        role: true,
         isActive: true,
         schoolId: true,
         school: {
@@ -67,11 +67,16 @@ export async function requireRole(allowedRoles: Role[]) {
       redirect("/login?error=no_school");
     }
 
+    // 🚨 School Suspended Handling:
     if (dbUser.school.status === "SUSPENDED") {
-      redirect("/suspended");
+      if (dbUser.role === "SCHOOL_ADMIN") {
+        redirect("/suspended");
+      } else {
+        // Teachers, Students, Parents will see login failed / suspended error
+        redirect("/login?error=account_suspended");
+      }
     }
   } catch (err: any) {
-    // If redirect was triggered, rethrow it for Next.js
     if (err?.digest?.startsWith("NEXT_REDIRECT")) {
       throw err;
     }
