@@ -7,8 +7,6 @@ const prisma = rawPrisma as any;
 
 export const dynamic = "force-dynamic";
 
-// ── Color palette per event type ──────────────────────────────────
-
 const TYPE_COLOR: Record<string, string> = {
   exam: "#7c3aed",
   ptm: "#2563eb",
@@ -19,7 +17,14 @@ const TYPE_COLOR: Record<string, string> = {
   announcement: "#0891b2",
 };
 
-// ── Birthday helper — recurring annual ────────────────────────────
+async function resolveSchoolId(userId: string, sessionSchoolId?: string | null): Promise<string | null> {
+  if (sessionSchoolId) return sessionSchoolId;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { schoolId: true },
+  });
+  return user?.schoolId ?? null;
+}
 
 function birthdayInRange(dob: Date, start: Date, end: Date): Date[] {
   const hits: Date[] = [];
@@ -36,7 +41,6 @@ function birthdayInRange(dob: Date, start: Date, end: Date): Date[] {
   return hits;
 }
 
-// ── Timezone-Safe Local YYYY-MM-DD Formatter ──────────────────────
 function toISO(d: Date | string): string {
   try {
     if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
@@ -65,6 +69,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 401 });
     }
 
+    const schoolId = await resolveSchoolId(session.user.id, (session.user as any).schoolId);
+    if (!schoolId) {
+      return NextResponse.json([]);
+    }
+
     const sp = request.nextUrl.searchParams;
     const startStr = sp.get("start");
     const endStr = sp.get("end");
@@ -77,18 +86,14 @@ export async function GET(request: NextRequest) {
     const start = new Date(startStr);
     const end = new Date(endStr);
 
-    // Validate dates to avoid Prisma execution errors
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return NextResponse.json([]);
     }
 
-    // Widen filter boundaries by 1 day buffer to handle timezone offsets cleanly
     const safeStart = new Date(start.getTime() - 24 * 60 * 60 * 1000);
     const safeEnd = new Date(end.getTime() + 24 * 60 * 60 * 1000);
 
     const role = session.user.role;
-    const userId = session.user.id;
-    const schoolId = session.user.schoolId ?? "";
     const typeFilter = typesStr ? typesStr.toLowerCase().split(",") : null;
 
     const want = (t: string) =>
@@ -97,12 +102,6 @@ export async function GET(request: NextRequest) {
       (t === "school_event" && (typeFilter.includes("event") || typeFilter.includes("school_event")));
 
     const events: Record<string, unknown>[] = [];
-
-    if (!schoolId) {
-      return NextResponse.json([]);
-    }
-
-    // ── SCHOOL_ADMIN & SUPER_ADMIN ────────────────────────────────
 
     if (role === "SCHOOL_ADMIN" || role === "SUPER_ADMIN") {
       const [
@@ -114,7 +113,6 @@ export async function GET(request: NextRequest) {
         studentBirthdays,
         announcements,
       ] = await Promise.all([
-        // Exams
         want("exam")
           ? prisma.exam
               .findMany({
@@ -130,7 +128,6 @@ export async function GET(request: NextRequest) {
               .catch(() => [])
           : [],
 
-        // PTM slots
         want("ptm")
           ? prisma.ptmSlot
               .findMany({
@@ -147,7 +144,6 @@ export async function GET(request: NextRequest) {
               .catch(() => [])
           : [],
 
-        // Holidays
         want("holiday")
           ? prisma.holiday
               .findMany({
@@ -156,7 +152,6 @@ export async function GET(request: NextRequest) {
               .catch(() => [])
           : [],
 
-        // Fee due dates
         want("fee")
           ? prisma.feeStructure
               .findMany({
@@ -169,7 +164,6 @@ export async function GET(request: NextRequest) {
               .catch(() => [])
           : [],
 
-        // School events
         want("school_event")
           ? prisma.schoolEvent
               .findMany({
@@ -186,7 +180,6 @@ export async function GET(request: NextRequest) {
               .catch(() => [])
           : [],
 
-        // Student birthdays
         want("birthday")
           ? prisma.studentProfile
               .findMany({
@@ -199,7 +192,6 @@ export async function GET(request: NextRequest) {
               .catch(() => [])
           : [],
 
-        // Announcements
         want("announcement")
           ? prisma.announcement
               .findMany({
@@ -209,7 +201,7 @@ export async function GET(request: NextRequest) {
           : [],
       ]);
 
-      // ── Transform Exams ──
+      // Exams
       for (const e of exams) {
         events.push({
           id: `exam-${e.id}`,
@@ -219,19 +211,16 @@ export async function GET(request: NextRequest) {
           allDay: true,
           color: TYPE_COLOR.exam,
           textColor: "#fff",
-          editable: false,
           extendedProps: {
             type: "exam",
             examType: e.examType,
             className: e.class?.name ?? "",
             description: `${e.examType?.replace(/_/g, " ") ?? "Exam"} · ${e.class?.name ?? ""}`,
-            editable: false,
-            entityId: e.id,
           },
         });
       }
 
-      // ── Transform PTM slots ──
+      // PTM
       for (const s of ptmSlots) {
         const dateStr = toISO(s.date);
         const teacher = s.teacherProfile?.user?.name ?? "Teacher";
@@ -246,23 +235,16 @@ export async function GET(request: NextRequest) {
           allDay: !s.startTime,
           color: booked ? TYPE_COLOR.ptm : "#93c5fd",
           textColor: booked ? "#fff" : "#1e40af",
-          editable: false,
           extendedProps: {
             type: "ptm",
             booked,
             teacher,
             student: s.booking?.studentProfile?.user?.name,
-            description: booked
-              ? `${s.booking?.studentProfile?.user?.name} with ${teacher}`
-              : `Available slot for ${teacher}`,
-            notes: s.notes,
-            entityId: s.id,
-            editable: false,
           },
         });
       }
 
-      // ── Transform Holidays ──
+      // Holidays
       for (const h of holidays) {
         events.push({
           id: `holiday-${h.id}`,
@@ -271,18 +253,15 @@ export async function GET(request: NextRequest) {
           allDay: true,
           color: TYPE_COLOR.holiday,
           textColor: "#fff",
-          editable: true,
           extendedProps: {
             type: "holiday",
             holidayType: h.type,
             description: h.description ?? h.type?.replace(/_/g, " "),
-            entityId: h.id,
-            editable: true,
           },
         });
       }
 
-      // ── Transform Fee due dates ──
+      // Fee Dues
       for (const f of feeStructures) {
         if (!f.dueDate) continue;
         events.push({
@@ -292,19 +271,15 @@ export async function GET(request: NextRequest) {
           allDay: true,
           color: TYPE_COLOR.fee,
           textColor: "#fff",
-          editable: false,
           extendedProps: {
             type: "fee",
             amount: f.amount,
             academicYear: f.academicYear,
-            description: `₹${f.amount?.toLocaleString("en-IN") ?? 0} · ${f.academicYear ?? ""}`,
-            entityId: f.id,
-            editable: false,
           },
         });
       }
 
-      // ── Transform School Events ──
+      // School Events
       for (const e of schoolEvents) {
         const startISO = e.startTime
           ? `${toISO(e.startDate)}T${e.startTime}:00`
@@ -322,19 +297,16 @@ export async function GET(request: NextRequest) {
           allDay: e.allDay,
           color: e.color ?? TYPE_COLOR.school_event,
           textColor: "#fff",
-          editable: true,
           extendedProps: {
             type: "school_event",
             eventType: e.type,
             description: e.description,
             createdBy: e.createdBy?.name ?? "Admin",
-            entityId: e.id,
-            editable: true,
           },
         });
       }
 
-      // ── Transform Student Birthdays ──
+      // Birthdays
       for (const sp of studentBirthdays) {
         if (!sp.dateOfBirth) continue;
         const dates = birthdayInRange(sp.dateOfBirth, start, end);
@@ -346,19 +318,16 @@ export async function GET(request: NextRequest) {
             allDay: true,
             color: TYPE_COLOR.birthday,
             textColor: "#fff",
-            editable: false,
             extendedProps: {
               type: "birthday",
               className: sp.section?.class?.name,
               section: sp.section?.name,
-              description: `${sp.user?.name}'s Birthday${sp.section ? ` · ${sp.section.class?.name}-${sp.section.name}` : ""}`,
-              editable: false,
             },
           });
         }
       }
 
-      // ── Transform Announcements ──
+      // Announcements
       for (const a of announcements) {
         events.push({
           id: `ann-${a.id}`,
@@ -367,18 +336,14 @@ export async function GET(request: NextRequest) {
           allDay: true,
           color: TYPE_COLOR.announcement,
           textColor: "#fff",
-          editable: false,
           extendedProps: {
             type: "announcement",
             description: a.content?.slice(0, 120),
-            entityId: a.id,
-            editable: false,
           },
         });
       }
     }
 
-    // Always return array directly
     return NextResponse.json(events);
   } catch (error) {
     console.error("[CALENDAR_GET_ERROR]", error);
@@ -395,7 +360,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
   if (session.user.role !== "SCHOOL_ADMIN") return new NextResponse("Forbidden", { status: 403 });
 
-  const schoolId = session.user.schoolId ?? "";
+  const schoolId = await resolveSchoolId(session.user.id, (session.user as any).schoolId);
   if (!schoolId) return new NextResponse("No school assigned", { status: 400 });
 
   try {
@@ -406,7 +371,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title and start date required" }, { status: 400 });
     }
 
-    // Cleanly construct Date objects without UTC shift
     const parsedStart = new Date(startDate.includes("T") ? startDate : `${startDate}T00:00:00`);
     const parsedEnd = endDate ? new Date(endDate.includes("T") ? endDate : `${endDate}T23:59:59`) : null;
 
