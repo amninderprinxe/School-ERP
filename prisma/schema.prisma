@@ -46,43 +46,6 @@ model Holiday {
   @@map("holidays")
 }
 
- // model PtmSlot {
-//  id               String         @id @default(cuid())
-//  date             DateTime       @db.Date
-//  startTime        String
-// endTime          String
-//  isBooked         Boolean        @default(false)
-// notes            String?
-//  createdAt        DateTime       @default(now())
-//  updatedAt        DateTime       @updatedAt
-//  schoolId         String
-//  teacherProfileId String
-//  booking          PtmMeeting?
-//  school           School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-// teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
-
-//  @@index([schoolId])
-//  @@index([schoolId, date])
-//  @@index([teacherProfileId])
-//  @@map("ptm_slots")
-// }
-// model PtmMeeting {
-
-//  id               String         @id @default(cuid())
-//  status           PtmStatus      @default(SCHEDULED)
-//  teacherNote      String?
-//  createdAt        DateTime       @default(now())
-//  updatedAt        DateTime       @updatedAt
-//  slotId           String         @unique
-//  studentProfileId String
-//  slot             PtmSlot        @relation(fields: [slotId], references: [id], onDelete: Cascade)
-//  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
-
-//  @@index([studentProfileId])
-// @@map("ptm_meetings")
-
-// }
-
 model School {
   id                 String         @id @default(cuid())
   name               String
@@ -122,7 +85,6 @@ model School {
   holidays           Holiday[]
   notifications      Notification[]
   periods            Period[]
-  // ptmSlots           PtmSlot[]
   results            Result[]
   schoolEvents       SchoolEvent[]
   sections           Section[]
@@ -178,7 +140,7 @@ model AcademicYear {
 model User {
   id                  String               @id @default(cuid())
   name                String
-  email               String?               @unique
+  email               String?              @unique
   password            String
   role                Role
   gender              Gender?
@@ -211,7 +173,6 @@ model TeacherProfile {
   updatedAt      DateTime         @updatedAt
   userId         String           @unique
   periods        Period[]
-  // ptmSlots       PtmSlot[]
   classTeacherOf Section[]
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   subjects       TeacherSubject[]
@@ -221,21 +182,20 @@ model TeacherProfile {
 
 model StudentProfile {
   id              String                  @id @default(cuid())
-  studentCode     String?                 @unique
   rollNumber      String?
   admissionNo     String?
   dateOfBirth     DateTime?
   bloodGroup      String?
   address         String?
-  fatherName      String?
-  motherName      String?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
   userId          String                  @unique
   sectionId       String?
+  fatherName      String?
+  motherName      String?
+  studentCode     String?                 @unique
   attendance      Attendance[]
   feePayments     FeePayment[]
-//  ptmMeetings     PtmMeeting[]
   results         Result[]
   academicRecords StudentAcademicRecord[]
   section         Section?                @relation(fields: [sectionId], references: [id])
@@ -345,7 +305,7 @@ model TeacherSubject {
 model Announcement {
   id        String   @id @default(cuid())
   title     String
-  content   String  @db.Text
+  content   String   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   schoolId  String
@@ -592,12 +552,6 @@ enum SchoolStatus {
   INACTIVE
   SUSPENDED
 }
-
-// enum PtmStatus {
-//  SCHEDULED
-//  COMPLETED
-//  CANCELLED
-// }
 
 enum Gender {
   MALE

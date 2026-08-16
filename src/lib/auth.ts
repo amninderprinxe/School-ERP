@@ -38,7 +38,7 @@ declare module "next-auth/jwt" {
 }
 
 // ============================================================
-// 2. MAIN AUTH CONFIGURATION
+// 2. MAIN AUTH CONFIGURATION (MySQL Compatible)
 // ============================================================
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -62,13 +62,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const rawIdentifier = (credentials?.identifier ?? credentials?.email) as string | undefined;
         const rawPassword = credentials?.password as string | undefined;
 
-        console.log("[AUTH DEBUG] Received login attempt for:", rawIdentifier);
-
         if (
           typeof rawIdentifier !== "string" ||
           typeof rawPassword !== "string"
         ) {
-          console.log("[AUTH DEBUG] Missing identifier or password in payload");
           return null;
         }
 
@@ -76,73 +73,57 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = rawPassword;
 
         if (!identifier || !password) {
-          console.log("[AUTH DEBUG] Blank identifier or password");
           return null;
         }
 
         const normalizedEmail = identifier.toLowerCase();
         const normalizedLoginId = identifier.toUpperCase();
 
-        // 1. Search for user by email or loginId
-        const user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { email: { equals: normalizedEmail, mode: "insensitive" } },
-              { loginId: { equals: normalizedLoginId, mode: "insensitive" } },
-            ],
-          },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            loginId: true,
-            password: true,
-            role: true,
-            schoolId: true,
-            isActive: true,
-          },
-        });
+        try {
+          // MySQL is case-insensitive by default (NO mode: "insensitive" needed)
+          const user = await prisma.user.findFirst({
+            where: {
+              isActive: true,
+              OR: [
+                { email: normalizedEmail },
+                { loginId: normalizedLoginId },
+              ],
+            },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              loginId: true,
+              password: true,
+              role: true,
+              schoolId: true,
+              isActive: true,
+            },
+          });
 
-        if (!user) {
-          console.log("[AUTH DEBUG] No user found in DB for:", normalizedEmail);
+          if (!user || !user.password) {
+            return null;
+          }
+
+          // Compare hashed password
+          const passwordMatches = await bcrypt.compare(password, user.password);
+
+          if (!passwordMatches) {
+            return null;
+          }
+
+          return {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            schoolId: user.schoolId,
+            loginId: user.loginId,
+          };
+        } catch (error) {
+          console.error("[AUTH_ERROR]", error);
           return null;
         }
-
-        console.log("[AUTH DEBUG] User record found:", {
-          id: user.id,
-          role: user.role,
-          isActive: user.isActive,
-          hasPassword: Boolean(user.password),
-        });
-
-        if (!user.isActive) {
-          console.log("[AUTH DEBUG] Account is inactive (isActive = false)");
-          return null;
-        }
-
-        if (!user.password) {
-          console.log("[AUTH DEBUG] User record has no password hash");
-          return null;
-        }
-
-        // 2. Compare hashed password
-        const passwordMatches = await bcrypt.compare(password, user.password);
-        console.log("[AUTH DEBUG] Password check result:", passwordMatches);
-
-        if (!passwordMatches) {
-          console.log("[AUTH DEBUG] Password mismatch for:", normalizedEmail);
-          return null;
-        }
-
-        // 3. Return sanitized JWT payload
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          schoolId: user.schoolId,
-          loginId: user.loginId,
-        };
       },
     }),
   ],
