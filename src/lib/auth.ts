@@ -42,7 +42,7 @@ declare module "next-auth/jwt" {
 // ============================================================
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true, // Required for Vercel and reverse proxy environments
+  trustHost: true,
   secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   session: {
     strategy: "jwt",
@@ -53,19 +53,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       name: "Credentials",
       credentials: {
-        identifier: {
-          label: "Email or Student ID",
-          type: "text",
-        },
-        password: {
-          label: "Password",
-          type: "password",
-        },
+        identifier: { label: "Email, Login ID or Student ID", type: "text" },
+        email: { label: "Email (fallback)", type: "text" },
+        password: { label: "Password", type: "password" },
       },
 
       async authorize(credentials) {
-        const rawIdentifier = credentials?.identifier;
-        const rawPassword = credentials?.password;
+        // Accepts identifier OR email payload from frontend forms
+        const rawIdentifier = (credentials?.identifier ?? credentials?.email) as string | undefined;
+        const rawPassword = credentials?.password as string | undefined;
 
         if (
           typeof rawIdentifier !== "string" ||
@@ -84,13 +80,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const normalizedEmail = identifier.toLowerCase();
         const normalizedLoginId = identifier.toUpperCase();
 
-        // Single query indexed lookup supporting Email, Admin loginId, and Student ID (e.g., KRD-0001)
+        // 1. Search for active user by email, login ID, or phone
         const user = await prisma.user.findFirst({
           where: {
             isActive: true,
             OR: [
-              { email: normalizedEmail },
-              { loginId: normalizedLoginId },
+              { email: { equals: normalizedEmail, mode: "insensitive" } },
+              { loginId: { equals: normalizedLoginId, mode: "insensitive" } },
             ],
           },
           select: {
@@ -105,17 +101,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
 
+        // 2. Guard against missing user or uninitialized passwords
         if (!user || !user.password) {
           return null;
         }
 
+        // 3. Compare hashed password
         const passwordMatches = await bcrypt.compare(password, user.password);
 
         if (!passwordMatches) {
           return null;
         }
 
-        // Return user payload for JWT creation
+        // 4. Return sanitized JWT payload
         return {
           id: user.id,
           name: user.name,
@@ -141,10 +139,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
     async session({ session, token }) {
       if (session.user && token) {
-        session.user.id = token.id;
-        session.user.role = token.role;
-        session.user.schoolId = token.schoolId ?? null;
-        session.user.loginId = token.loginId ?? null;
+        session.user.id = token.id as string;
+        session.user.role = token.role as Role;
+        session.user.schoolId = (token.schoolId as string) ?? null;
+        session.user.loginId = (token.loginId as string) ?? null;
       }
       return session;
     },
