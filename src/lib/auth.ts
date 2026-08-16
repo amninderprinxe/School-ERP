@@ -59,14 +59,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
 
       async authorize(credentials) {
-        // Accepts identifier OR email payload from frontend forms
         const rawIdentifier = (credentials?.identifier ?? credentials?.email) as string | undefined;
         const rawPassword = credentials?.password as string | undefined;
+
+        console.log("[AUTH DEBUG] Received login attempt for:", rawIdentifier);
 
         if (
           typeof rawIdentifier !== "string" ||
           typeof rawPassword !== "string"
         ) {
+          console.log("[AUTH DEBUG] Missing identifier or password in payload");
           return null;
         }
 
@@ -74,16 +76,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = rawPassword;
 
         if (!identifier || !password) {
+          console.log("[AUTH DEBUG] Blank identifier or password");
           return null;
         }
 
         const normalizedEmail = identifier.toLowerCase();
         const normalizedLoginId = identifier.toUpperCase();
 
-        // 1. Search for active user by email, login ID, or phone
+        // 1. Search for user by email or loginId
         const user = await prisma.user.findFirst({
           where: {
-            isActive: true,
             OR: [
               { email: { equals: normalizedEmail, mode: "insensitive" } },
               { loginId: { equals: normalizedLoginId, mode: "insensitive" } },
@@ -101,19 +103,38 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
 
-        // 2. Guard against missing user or uninitialized passwords
-        if (!user || !user.password) {
+        if (!user) {
+          console.log("[AUTH DEBUG] No user found in DB for:", normalizedEmail);
           return null;
         }
 
-        // 3. Compare hashed password
+        console.log("[AUTH DEBUG] User record found:", {
+          id: user.id,
+          role: user.role,
+          isActive: user.isActive,
+          hasPassword: Boolean(user.password),
+        });
+
+        if (!user.isActive) {
+          console.log("[AUTH DEBUG] Account is inactive (isActive = false)");
+          return null;
+        }
+
+        if (!user.password) {
+          console.log("[AUTH DEBUG] User record has no password hash");
+          return null;
+        }
+
+        // 2. Compare hashed password
         const passwordMatches = await bcrypt.compare(password, user.password);
+        console.log("[AUTH DEBUG] Password check result:", passwordMatches);
 
         if (!passwordMatches) {
+          console.log("[AUTH DEBUG] Password mismatch for:", normalizedEmail);
           return null;
         }
 
-        // 4. Return sanitized JWT payload
+        // 3. Return sanitized JWT payload
         return {
           id: user.id,
           name: user.name,
