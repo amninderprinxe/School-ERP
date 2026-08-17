@@ -21,11 +21,22 @@ export default async function EditSubjectPage({ params }: Props) {
     prisma.subject.findFirst({
       where: { id, schoolId },
       include: {
-        teachers: { select: { teacherProfileId: true } },
+        teachers: {
+          select: {
+            teacherProfileId: true,
+            sectionId: true,
+          },
+        },
       },
     }),
     prisma.class.findMany({
       where: { schoolId },
+      include: {
+        sections: {
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        },
+      },
       orderBy: { name: "asc" },
     }),
     prisma.teacherProfile.findMany({
@@ -50,6 +61,9 @@ export default async function EditSubjectPage({ params }: Props) {
     assignedTeacherProfileIds: subject.teachers
       .map((t) => t.teacherProfileId)
       .filter((teacherId): teacherId is string => Boolean(teacherId)),
+    assignedSectionIds: subject.teachers
+      .map((t) => t.sectionId)
+      .filter((sectionId): sectionId is string => Boolean(sectionId)),
   };
 
   const boundAction = updateSubject.bind(null, subject.id);
