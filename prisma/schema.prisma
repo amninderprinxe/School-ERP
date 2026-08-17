@@ -264,6 +264,7 @@ model Section {
   school         School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   studentRecords StudentAcademicRecord[]
   students       StudentProfile[]
+  teacherSubjects TeacherSubject[]
 
   @@unique([classId, name])
   @@index([classTeacherId], map: "sections_classTeacherId_fkey")
@@ -285,22 +286,31 @@ model Subject {
   school    School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teachers  TeacherSubject[]
 
-  @@unique([schoolId, classId, name])
+  @@unique([schoolId, classId, name]) // ਇਸ ਨਾਲ ਇੱਕ ਕਲਾਸ ਵਿੱਚ ਵਿਸ਼ਾ (e.g. English) ਸਿਰਫ਼ ਇੱਕ ਵਾਰ ਬਣੇਗਾ
   @@index([classId], map: "subjects_classId_fkey")
   @@map("subjects")
 }
 
 model TeacherSubject {
   id               String         @id @default(cuid())
-  teacherProfileId String
+  teacherProfileId String?        // Optional ਤਾਂ ਕਿ ਬਿਨਾਂ ਟੀਚਰ ਦੇ ਵੀ ਸਬਜੈਕਟ ਸੈਕਸ਼ਨ ਨੂੰ ਅਸਾਈਨ ਹੋ ਸਕੇ
   subjectId        String
-  subject          Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  sectionId        String         // ✨ new: ਸੈਕਸ਼ਨ ID
 
-  @@unique([teacherProfileId, subjectId])
+  subject          Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherProfile   TeacherProfile? @relation(fields: [teacherProfileId], references: [id], onDelete: SetNull)
+  section          Section        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([subjectId, sectionId]) // ✨ ਇੱਕ ਸੈਕਸ਼ਨ ਵਿੱਚ ਉਸ ਵਿਸ਼ੇ ਦੀ ਇੱਕੋ ਐਂਟਰੀ ਹੋਵੇਗੀ
   @@index([subjectId], map: "teacher_subjects_subjectId_fkey")
+  @@index([sectionId], map: "teacher_subjects_sectionId_fkey")
+  @@index([teacherProfileId], map: "teacher_subjects_teacherProfileId_fkey")
   @@map("teacher_subjects")
 }
+
 
 model Announcement {
   id        String   @id @default(cuid())
