@@ -1,6 +1,6 @@
-import { requireRole }  from "@/lib/session";
-import { prisma }       from "@/lib/db";
-import { BookMarked }   from "lucide-react";
+import { requireRole } from "@/lib/session";
+import { prisma } from "@/lib/db";
+import { BookMarked } from "lucide-react";
 
 export const metadata = { title: "My Subjects" };
 
@@ -8,20 +8,24 @@ export default async function StudentSubjectsPage() {
   const user = await requireRole(["STUDENT"]);
 
   const studentProfile = await prisma.studentProfile.findUnique({
-    where:   { userId: user.id },
+    where: { userId: user.id },
     include: {
       section: { include: { class: true } },
     },
   });
 
-  const subjects = studentProfile?.section?.classId
+  const sectionId = studentProfile?.sectionId;
+  const classId = studentProfile?.section?.classId;
+
+  const subjects = classId
     ? await prisma.subject.findMany({
-        where:   { classId: studentProfile.section.classId },
+        where: { classId },
         include: {
           teachers: {
+            where: sectionId ? { sectionId } : undefined,
             include: {
               teacherProfile: {
-                include: { user: { select: { name: true } } },
+                include: { user: { select: { name: true, email: true } } },
               },
             },
           },
@@ -70,8 +74,7 @@ export default async function StudentSubjectsPage() {
                   {["#", "Subject", "Code", "Teacher(s)"].map((h) => (
                     <th
                       key={h}
-                      className="px-5 py-3.5 text-xs font-semibold text-gray-500
-                        uppercase tracking-wide text-left"
+                      className="px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left"
                     >
                       {h}
                     </th>
@@ -79,56 +82,59 @@ export default async function StudentSubjectsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {subjects.map((sub, i) => (
-                  <tr
-                    key={sub.id}
-                    className="hover:bg-gray-50/50 transition-colors"
-                  >
-                    <td className="px-5 py-4 text-xs text-gray-400">
-                      {i + 1}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-purple-50 rounded-lg flex
-                          items-center justify-center shrink-0">
-                          <BookMarked className="w-3.5 h-3.5 text-purple-600" />
+                {subjects.map((sub, i) => {
+                  const assignedTeachers = sub.teachers.filter(
+                    (t) => t.teacherProfile?.user?.name
+                  );
+
+                  return (
+                    <tr
+                      key={sub.id}
+                      className="hover:bg-gray-50/50 transition-colors"
+                    >
+                      <td className="px-5 py-4 text-xs text-gray-400">
+                        {i + 1}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center shrink-0">
+                            <BookMarked className="w-3.5 h-3.5 text-purple-600" />
+                          </div>
+                          <span className="font-medium text-gray-900">
+                            {sub.name}
+                          </span>
                         </div>
-                        <span className="font-medium text-gray-900">
-                          {sub.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      {sub.code ? (
-                        <span className="font-mono text-xs text-gray-500
-                          bg-gray-100 px-2 py-0.5 rounded">
-                          {sub.code}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      {sub.teachers.length === 0 ? (
-                        <span className="text-xs text-gray-300">
-                          Not assigned
-                        </span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {sub.teachers.map(({ teacherProfile }) => (
-                            <span
-                              key={teacherProfile.id}
-                              className="px-2 py-0.5 text-xs font-medium
-                                bg-blue-50 text-blue-700 rounded-full"
-                            >
-                              {teacherProfile.user.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-4">
+                        {sub.code ? (
+                          <span className="font-mono text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            {sub.code}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        {assignedTeachers.length === 0 ? (
+                          <span className="text-xs text-gray-400">
+                            Not assigned
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {assignedTeachers.map((t) => (
+                              <span
+                                key={t.id}
+                                className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full"
+                              >
+                                {t.teacherProfile?.user?.name ?? "Teacher"}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

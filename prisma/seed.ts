@@ -22,7 +22,7 @@ async function main() {
       isActive: true,
     },
   });
-  console.log(`✅  Super Admin    → ${superAdmin.email}`);
+  console.log(`✅  Super Admin     → ${superAdmin.email}`);
 
   // ── 2. SCHOOL (tenant) ───────────────────────────────────────────────────
   const school = await prisma.school.upsert({
@@ -40,7 +40,7 @@ async function main() {
       status:  SchoolStatus.ACTIVE,
     },
   });
-  console.log(`✅  School         → ${school.name}  (slug: ${school.slug})`);
+  console.log(`✅  School          → ${school.name}  (slug: ${school.slug})`);
 
   // ── 3. SCHOOL ADMIN ──────────────────────────────────────────────────────
   const schoolAdmin = await prisma.user.upsert({
@@ -56,7 +56,7 @@ async function main() {
       schoolId: school.id,
     },
   });
-  console.log(`✅  School Admin   → ${schoolAdmin.email}`);
+  console.log(`✅  School Admin    → ${schoolAdmin.email}`);
 
   // ── 4. CLASS ─────────────────────────────────────────────────────────────
   const grade10 = await prisma.class.upsert({
@@ -64,7 +64,7 @@ async function main() {
     update: {},
     create: { name: "Grade 10", schoolId: school.id },
   });
-  console.log(`✅  Class          → ${grade10.name}`);
+  console.log(`✅  Class           → ${grade10.name}`);
 
   // ── 5. TEACHER user ──────────────────────────────────────────────────────
   const teacherUser = await prisma.user.upsert({
@@ -81,7 +81,7 @@ async function main() {
     },
   });
 
-  // 5a. TEACHER profile (separate upsert — avoids nested-create conflict on re-seed)
+  // 5a. TEACHER profile
   const teacherProfile = await prisma.teacherProfile.upsert({
     where:  { userId: teacherUser.id },
     update: {
@@ -95,7 +95,7 @@ async function main() {
       joiningDate:   new Date("2020-06-01"),
     },
   });
-  console.log(`✅  Teacher        → ${teacherUser.email}  (${teacherProfile.employeeCode})`);
+  console.log(`✅  Teacher         → ${teacherUser.email}  (${teacherProfile.employeeCode})`);
 
   // ── 6. SECTION (assigns class teacher) ───────────────────────────────────
   const sectionA = await prisma.section.upsert({
@@ -108,7 +108,7 @@ async function main() {
       classTeacherId: teacherProfile.id,
     },
   });
-  console.log(`✅  Section        → ${grade10.name} — Section ${sectionA.name}`);
+  console.log(`✅  Section         → ${grade10.name} — Section ${sectionA.name}`);
 
   // ── 7. SUBJECT ───────────────────────────────────────────────────────────
   const mathSubject = await prisma.subject.upsert({
@@ -128,21 +128,24 @@ async function main() {
     },
   });
 
-  // assign teacher to subject
+  // Assign teacher to subject and section
   await prisma.teacherSubject.upsert({
     where: {
-      teacherProfileId_subjectId: {
-        teacherProfileId: teacherProfile.id,
-        subjectId:        mathSubject.id,
+      subjectId_sectionId: {
+        subjectId: mathSubject.id,
+        sectionId: sectionA.id,
       },
     },
-    update: {},
-    create: {
+    update: {
       teacherProfileId: teacherProfile.id,
+    },
+    create: {
       subjectId:        mathSubject.id,
+      sectionId:        sectionA.id,
+      teacherProfileId: teacherProfile.id,
     },
   });
-  console.log(`✅  Subject        → ${mathSubject.name} assigned to ${teacherUser.name}`);
+  console.log(`✅  Subject         → ${mathSubject.name} assigned to ${teacherUser.name} for Section ${sectionA.name}`);
 
   // ── 8. STUDENT user ──────────────────────────────────────────────────────
   const studentUser = await prisma.user.upsert({
@@ -172,10 +175,9 @@ async function main() {
       sectionId:   sectionA.id,
     },
   });
-  console.log(`✅  Student        → ${studentUser.email}  (Roll: ${studentProfile.rollNumber})`);
+  console.log(`✅  Student         → ${studentUser.email}  (Roll: ${studentProfile.rollNumber})`);
 
   // ── 9. ANNOUNCEMENT ─────────────────────────────────────────────────────
-  // Announcement has no unique field, so use findFirst guard instead of upsert
   const announcementExists = await prisma.announcement.findFirst({
     where: {
       schoolId: school.id,
@@ -193,14 +195,14 @@ async function main() {
       },
     });
   }
-  console.log(`✅  Announcement   → Welcome notice created`);
+  console.log(`✅  Announcement    → Welcome notice created`);
 
   // ── SUMMARY ──────────────────────────────────────────────────────────────
   console.log(`
 ${"─".repeat(62)}
   SEED COMPLETE — Demo Login Credentials
 ${"─".repeat(62)}
-  Role          Email                        Password
+  Role          Email                         Password
 ${"─".repeat(62)}
   SUPER_ADMIN   superadmin@erp.com           ${DEFAULT_PASSWORD}
   SCHOOL_ADMIN  admin@greenwood.edu          ${DEFAULT_PASSWORD}
