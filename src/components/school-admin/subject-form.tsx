@@ -3,13 +3,19 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { SubmitButton } from "@/components/ui/submit-button";
+import { Check, Loader2 } from "lucide-react";
 import type { ActionResult } from "@/types/actions";
 
 // ── Prop types ────────────────────────────────────────────────────
+interface SectionOption {
+  id: string;
+  name: string;
+}
+
 interface ClassOption {
   id: string;
   name: string;
+  sections?: SectionOption[];
 }
 
 interface TeacherOption {
@@ -23,6 +29,7 @@ interface SubjectInitialData {
   code: string | null;
   classId: string;
   assignedTeacherProfileIds: string[];
+  assignedSectionIds?: string[];
 }
 
 interface SubjectFormProps {
@@ -54,12 +61,64 @@ export function SubjectForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [fe, setFe] = useState<Record<string, string[] | undefined>>({});
 
+  // 1. State for selected class
+  const [selectedClassId, setSelectedClassId] = useState<string>(
+    initialData?.classId || (classes[0]?.id ?? "")
+  );
+
+  // 2. Derive available sections for the current class
+  const currentClass = classes.find((c) => c.id === selectedClassId);
+  const availableSections = currentClass?.sections || [];
+
+  // 3. State for selected sections
+  const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>(
+    initialData?.assignedSectionIds && initialData.assignedSectionIds.length > 0
+      ? initialData.assignedSectionIds
+      : availableSections.map((s) => s.id)
+  );
+
+  const handleClassChange = (newClassId: string) => {
+    setSelectedClassId(newClassId);
+    const targetClass = classes.find((c) => c.id === newClassId);
+    const secIds = (targetClass?.sections || []).map((s) => s.id);
+    setSelectedSectionIds(secIds);
+  };
+
+  const toggleSection = (sectionId: string) => {
+    setSelectedSectionIds((prev) =>
+      prev.includes(sectionId)
+        ? prev.filter((id) => id !== sectionId)
+        : [...prev, sectionId]
+    );
+  };
+
+  const selectAllSections = () => {
+    setSelectedSectionIds(availableSections.map((s) => s.id));
+  };
+
+  const deselectAllSections = () => {
+    setSelectedSectionIds([]);
+  };
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
     setFe({});
 
-    const fd = new FormData(e.currentTarget);
+    if (availableSections.length > 0 && selectedSectionIds.length === 0) {
+      setFormError("Please select at least one section for this subject.");
+      return;
+    }
+
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+
+    // Overwrite classId and sectionIds cleanly
+    fd.set("classId", selectedClassId);
+    fd.delete("sectionIds");
+    selectedSectionIds.forEach((secId) => {
+      fd.append("sectionIds", secId);
+    });
 
     startTransition(async () => {
       const res = await action(fd);
@@ -67,8 +126,10 @@ export function SubjectForm({
         router.push("/school-admin/subjects");
         router.refresh();
       } else {
-        setFormError(res.error?? null);
-        if (!res.success && res.fieldErrors) setFe(res.fieldErrors);
+        setFormError(res.error ?? null);
+        if (!res.success && res.fieldErrors) {
+          setFe(res.fieldErrors);
+        }
       }
     });
   };
@@ -95,7 +156,7 @@ export function SubjectForm({
               name="name"
               required
               defaultValue={initialData?.name ?? ""}
-              placeholder="e.g. Mathematics, Physics, English"
+              placeholder="e.g. Mathematics, Physics, Hindi"
               className={INPUT}
             />
             {fe.name && (
@@ -115,7 +176,7 @@ export function SubjectForm({
               type="text"
               name="code"
               defaultValue={initialData?.code ?? ""}
-              placeholder="e.g. MATH-10, PHY-11"
+              placeholder="e.g. MATH-10, HIN-07"
               className={INPUT}
             />
             {fe.code && (
@@ -148,7 +209,8 @@ export function SubjectForm({
               <select
                 name="classId"
                 required
-                defaultValue={initialData?.classId ?? ""}
+                value={selectedClassId}
+                onChange={(e) => handleClassChange(e.target.value)}
                 className={`${INPUT} bg-white`}
               >
                 <option value="">— Select a class —</option>
@@ -161,12 +223,71 @@ export function SubjectForm({
               {fe.classId && (
                 <p className="text-xs text-red-500 mt-1">{fe.classId[0]}</p>
               )}
-              <p className="text-xs text-gray-400 mt-1.5">
-                Subject name must be unique within the selected class.
-              </p>
             </>
           )}
         </div>
+
+        {/* ── Section Selection Badges ───────────────────── */}
+        {selectedClassId && (
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider block">
+                  Select Applicable Sections <span className="text-red-500">*</span>
+                </label>
+                <span className="text-xs text-gray-500">
+                  Select which sections study this subject:
+                </span>
+              </div>
+              {availableSections.length > 1 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={selectAllSections}
+                    className="text-blue-600 hover:underline font-medium"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    type="button"
+                    onClick={deselectAllSections}
+                    className="text-gray-500 hover:underline font-medium"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {availableSections.length === 0 ? (
+              <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                No sections exist for this class. Go to Sections menu to create one first.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {availableSections.map((sec) => {
+                  const isSelected = selectedSectionIds.includes(sec.id);
+                  return (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      onClick={() => toggleSection(sec.id)}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                        isSelected
+                          ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                      }`}
+                    >
+                      <span>Section {sec.name}</span>
+                      {isSelected && <Check className="w-4 h-4" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Teacher checkboxes ────────────────────────── */}
         <div>
@@ -191,7 +312,7 @@ export function SubjectForm({
               </p>
             </div>
           ) : (
-            <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-60 overflow-y-auto">
+            <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-60 overflow-y-auto bg-white">
               {teachers.map((t) => {
                 const isChecked =
                   initialData?.assignedTeacherProfileIds.includes(t.id) ??
@@ -200,16 +321,14 @@ export function SubjectForm({
                 return (
                   <label
                     key={t.id}
-                    className="flex items-center gap-3 px-4 py-3
-                      hover:bg-gray-50 cursor-pointer transition-colors select-none"
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors select-none"
                   >
                     <input
                       type="checkbox"
                       name="teacherIds"
                       value={t.id}
                       defaultChecked={isChecked}
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600
-                        focus:ring-blue-500 focus:ring-offset-0"
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
@@ -231,14 +350,18 @@ export function SubjectForm({
 
       {/* ── Footer actions ────────────────────────────────── */}
       <div className="flex items-center gap-3 mt-8 pt-6 border-t border-gray-100">
-        <SubmitButton>
+        <button
+          type="submit"
+          disabled={isPending}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50"
+        >
+          {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
           {mode === "create" ? "Add Subject" : "Update Subject"}
-          </SubmitButton>
-          
+        </button>
+
         <Link
           href="/school-admin/subjects"
-          className="px-5 py-2.5 text-sm font-medium text-gray-600
-            bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          className="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
         >
           Cancel
         </Link>
