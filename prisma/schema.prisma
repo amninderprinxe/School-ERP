@@ -292,19 +292,19 @@ model Subject {
 }
 
 model TeacherSubject {
-  id               String         @id @default(cuid())
-  teacherProfileId String?        // Optional ਤਾਂ ਕਿ ਬਿਨਾਂ ਟੀਚਰ ਦੇ ਵੀ ਸਬਜੈਕਟ ਸੈਕਸ਼ਨ ਨੂੰ ਅਸਾਈਨ ਹੋ ਸਕੇ
+  id               String          @id @default(cuid())
+  teacherProfileId String?
   subjectId        String
-  sectionId        String         // ✨ new: ਸੈਕਸ਼ਨ ID
+  sectionId        String
 
-  subject          Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subject          Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   teacherProfile   TeacherProfile? @relation(fields: [teacherProfileId], references: [id], onDelete: SetNull)
-  section          Section        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  section          Section         @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @default(now()) @updatedAt
 
-  @@unique([subjectId, sectionId]) // ✨ ਇੱਕ ਸੈਕਸ਼ਨ ਵਿੱਚ ਉਸ ਵਿਸ਼ੇ ਦੀ ਇੱਕੋ ਐਂਟਰੀ ਹੋਵੇਗੀ
+  @@unique([subjectId, sectionId])
   @@index([subjectId], map: "teacher_subjects_subjectId_fkey")
   @@index([sectionId], map: "teacher_subjects_sectionId_fkey")
   @@index([teacherProfileId], map: "teacher_subjects_teacherProfileId_fkey")
